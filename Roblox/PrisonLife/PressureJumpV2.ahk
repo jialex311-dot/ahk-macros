@@ -8,7 +8,7 @@ SendMode("Input")
 DllCall("Winmm\timeBeginPeriod", "UInt", 1)
 
 ; you need to manually set this to a number
-CS := 0.36
+CS := 0.135
 
 ; ignore, this is the equation to do turn
 Spin := Round(180 * 2.5 / CS) ; 180 spin
