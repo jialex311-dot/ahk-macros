@@ -308,7 +308,7 @@ Three actions, no loop, no nesting.
 
 **1. `Date`**
 
-- Tap the field, choose **Specified Date**, type `today at 12:00 am`
+- Tap the field, choose **Specified Date**, type `2 days ago at 12:00 am`
 
 **2. `Find Reminders`** — three filters
 
@@ -316,9 +316,13 @@ Three actions, no loop, no nesting.
 - **Name** `contains` `homework`
 - **Creation Date** `is before` the `Date` variable from action 1
 
-**3. `Complete Reminders`**
+**3. `Remove Reminders`**
 
 - Input: `Reminders`
+
+There is no `Complete Reminders` action in Shortcuts, so this deletes the
+reminders rather than checking them off. Search `complete` first in case your iOS
+version exposes one under another name; otherwise `Remove Reminders` is it.
 
 ### Why it matches on the word "homework"
 
@@ -339,12 +343,13 @@ word confines the cleanup to layer 2's output and leaves Canvas items alone.
 ### The tradeoff
 
 At 4 AM nothing can distinguish "finished it" from "forgot it" — the shortcut
-just clears. For a grace period, change action 1 from `today at 12:00 am` to
-`2 days ago at 12:00 am`; work you skipped yesterday then stays in the list,
-overdue and red, for another day.
+just clears, and because the only available action deletes rather than completes,
+what it clears is gone for good.
 
-Use `Complete Reminders` rather than `Remove Reminders`. Completed items stay
-findable under Completed; removed ones are gone for good.
+That's why action 1 uses `2 days ago` rather than `today`. Work you skipped
+yesterday stays in the list tonight, overdue and red, instead of being silently
+deleted the morning after you forgot it. Tighten it to `today at 12:00 am` only
+if you find two days of history too cluttered.
 
 ### Stale Canvas items
 
