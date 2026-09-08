@@ -52,19 +52,53 @@ vs. unsubmitted filtering, which the calendar feed can't provide.
 This pulls every dated Canvas assignment into Apple Calendar and keeps itself
 current forever. Nothing to maintain.
 
-1. Log into Canvas **in a browser**. The Canvas app doesn't have this screen.
-   On your phone that means tapping **aA** in Safari's address bar and choosing
-   **Request Desktop Website**.
-2. Go to **Calendar**. In the right-hand sidebar, tap **Calendar Feed**.
-3. Copy the URL that appears. It looks like
-   `https://YOURSCHOOL.instructure.com/feeds/calendars/user_XXXXXXXX.ics`
-4. On your iPhone: **Settings → Calendar → Accounts → Add Account → Other →
-   Add Subscribed Calendar**. Paste the URL and tap **Next**, then **Save**.
-5. Name it `Canvas` when prompted. Remember this name — layer 3 looks for it.
+**This step uses two apps.** You get a link in Safari, then paste it into the
+Calendar app. Neither step happens in the Canvas app — it doesn't have this
+screen at all.
 
-To make it refresh often enough to be useful:
+### Part 1 — Get the link (Safari)
+
+1. Open **Safari** and go to your Canvas site. Log in.
+2. Tap **aA** on the left side of the address bar and choose
+   **Request Desktop Website**. The page shrinks and looks like a computer
+   screen. This matters — the button in step 4 doesn't exist on the mobile
+   layout.
+3. In the narrow vertical menu on the far left (Account, Dashboard, Courses,
+   Calendar, Inbox), tap **Calendar**.
+4. Look at the **right-hand column** and scroll it all the way to the bottom —
+   past the small month grid, past the list of your course names. The last
+   thing in that column is a button labelled **Calendar Feed**.
+5. Tap it. A box appears containing a long link starting `https://` and ending
+   in `.ics`
+6. Press and hold the link and choose **Copy**.
+
+The link is personal to you and doesn't expire. It's the only thing you need
+out of Canvas for this entire system.
+
+### Part 2 — Add it (Calendar app)
+
+1. Open the built-in **Calendar** app — the white icon showing today's date.
+2. Tap **Calendars** at the bottom center of the screen.
+3. Scroll to the bottom of that list and tap **Add Calendar**, then
+   **Add Subscription Calendar**.
+4. Paste your link into the URL box and tap **Subscribe**.
+5. A Name field appears with something ugly pre-filled. Delete it, type
+   `Canvas`, and tap **Add**.
+
+> If **Add Subscription Calendar** isn't in that menu, your iOS version puts it
+> somewhere else instead:
+> **Settings → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar**.
+> Same result.
+
+Name it exactly `Canvas` — capital C, nothing after it. Layer 3's first action
+searches for a calendar by that literal name, so `canvas` or `Canvas Calendar`
+will silently match nothing.
+
+### Part 3 — Make it refresh often
+
 **Settings → Calendar → Accounts → Fetch New Data** → turn **Fetch** on and set
-the interval to every 15 or 30 minutes.
+the interval to every 15 or 30 minutes. Without this, iOS updates subscribed
+calendars on its own lazy schedule and new assignments can take hours to show up.
 
 > Only assignments your teachers gave a **due date** appear in this feed.
 > That's the gap layer 2 exists to fill.
