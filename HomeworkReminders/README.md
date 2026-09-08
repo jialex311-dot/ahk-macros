@@ -20,6 +20,7 @@ So this splits the problem in two:
 | 1. Canvas calendar subscription | Anything with a due date in Canvas | none |
 | 2. Homework Check shortcut | Homework teachers only said out loud | ~3 taps |
 | 3. Canvas Sync shortcut | Turns layer 1 into checkable reminders | none |
+| 4. Clear Old Homework shortcut | Sweeps out yesterday's stale entries | none |
 
 Layers 1 and 3 run with zero interaction. Layer 2 is the only thing you touch,
 and it's a checkbox screen that takes about five seconds.
@@ -295,6 +296,60 @@ action 4 isn't matching the `Title` variable.
 
 Morning timing means the day's Canvas work is already sitting in Reminders
 before you leave the house.
+
+---
+
+## Layer 4 — The "Clear Old Homework" shortcut
+
+Reminders never clear themselves, so yesterday's untouched homework stays in the
+list looking identical to today's. This checks off the stale ones each night.
+
+Three actions, no loop, no nesting.
+
+**1. `Date`**
+
+- Tap the field, choose **Specified Date**, type `today at 12:00 am`
+
+**2. `Find Reminders`** — three filters
+
+- **List** `is` `School`
+- **Name** `contains` `homework`
+- **Creation Date** `is before` the `Date` variable from action 1
+
+**3. `Complete Reminders`**
+
+- Input: `Reminders`
+
+### Why it matches on the word "homework"
+
+Filtering on creation date alone would also wipe Canvas assignments that are
+still legitimately pending — Canvas Sync pulls items up to 7 days ahead, so a
+reminder synced Monday for something due Friday would disappear on Tuesday.
+
+Only the manually-logged reminders are named `<class> homework`, so matching that
+word confines the cleanup to layer 2's output and leaves Canvas items alone.
+
+### Schedule it
+
+**Automation → + → Time of Day** → `4:00 AM`, Repeat **Daily**, choose
+`Clear Old Homework`, **Run Immediately**, **Notify When Run** off.
+
+4 AM runs after any late-night work and before you wake up.
+
+### The tradeoff
+
+At 4 AM nothing can distinguish "finished it" from "forgot it" — the shortcut
+just clears. For a grace period, change action 1 from `today at 12:00 am` to
+`2 days ago at 12:00 am`; work you skipped yesterday then stays in the list,
+overdue and red, for another day.
+
+Use `Complete Reminders` rather than `Remove Reminders`. Completed items stay
+findable under Completed; removed ones are gone for good.
+
+### Stale Canvas items
+
+These are deliberately left alone, and they never go red because they carry no
+due date. Clear them by hand every week or so, or check them off as you go.
 
 ---
 
