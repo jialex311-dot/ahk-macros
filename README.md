@@ -65,6 +65,19 @@ How it works:
 
 ---
 
+## Utilities
+
+### Homework Reminders (iPhone)
+
+An automated school homework capture system for iPhone. Canvas assignments sync
+themselves into Apple Reminders, and a daily class checklist catches the homework
+teachers only announce out loud. Runs entirely on the phone — no PC, no server,
+no Canvas access token.
+
+See `HomeworkReminders/README.md` for the full setup guide.
+
+---
+
 ## Requirements
 
 ### General
