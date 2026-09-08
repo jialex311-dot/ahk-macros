@@ -115,9 +115,10 @@ you tap whichever ones have homework and it creates the reminders.
 Open **Shortcuts → + (new shortcut)**, name it `Homework Check`, and add these
 actions in order. Search for each action by name in the search bar.
 
-**1. `Text`**
+**1. `List` — your classes**
 
-Type your class names, one per line. Replace these with your own:
+Add a `List` action. Tap **Add new item** and type a class name, then tap it
+again for the next one, until all your classes are there:
 
 ```
 Algebra 2
@@ -127,44 +128,50 @@ English
 Spanish
 ```
 
-**2. `Split Text`**
+Each class is its own row you can see and edit. Adding a class next semester is
+one tap on **Add new item**.
 
-- Input: the `Text` from step 1
-- Separator: **New Lines**
+> An older version of this guide used a `Text` action holding one class per
+> line, followed by `Split Text` with the separator set to **New Lines**. That
+> works too — `Text` produces one blob of text, and `Split Text` cuts it at each
+> line break into separate items. The `List` action is just already a list, so
+> it saves an action and a concept. If you use the `Text` route, make sure the
+> separator says **New Lines** and not **Spaces**, or `US History` becomes two
+> classes.
 
-**3. `Date`**
+**2. `Date`**
 
 Tap the date field and type `today at 7:00 pm`. Shortcuts understands plain
 language here. This is when your homework reminders will go off — change the
 time to whatever actually fits your evening.
 
-**4. `Choose from List`**
+**3. `Choose from List`**
 
-- Input: `Split Text`
+- Input: `List`
 - Tap the arrow to expand options
 - **Select Multiple**: ON
 - **Prompt**: `Homework today?`
 
-**5. `If`**
+**4. `If`**
 
 - Input: `Chosen Items`
 - Condition: **has any value**
 
 This is what makes "no homework today" a silent no-op instead of an error.
 
-**6. `Repeat with Each`** — place this *inside* the If block
+**5. `Repeat with Each`** — place this *inside* the If block
 
 - Input: `Chosen Items`
 
-**7. `Add New Reminder`** — inside the Repeat block
+**6. `Add New Reminder`** — inside the Repeat block
 
 - Title: `Repeat Item` followed by the word ` homework`
   (so it reads `Chemistry homework`)
 - List: `School`
 - Tap the alert row, turn on **Remind me on a day**, and set the date field to
-  the `Date` variable from step 3
+  the `Date` variable from step 2
 
-**8. `Show Notification`** — inside the If, after the Repeat block ends
+**7. `Show Notification`** — inside the If, after the Repeat block ends
 
 - Text: `Homework added to your School list`
 
@@ -294,7 +301,7 @@ Check that **Run Immediately** is on — automations default to asking first.
 Low Power Mode can also delay a scheduled automation by several minutes.
 
 **A class is missing from the checklist.**
-Open `Homework Check` and edit the `Text` action in step 1. That one list is the
+Open `Homework Check` and tap **Add new item** on the `List` action in step 1. That one list is the
 only thing you ever need to change between semesters.
 
 **Nothing at all comes from Canvas.**
