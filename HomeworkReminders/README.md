@@ -152,28 +152,36 @@ time to whatever actually fits your evening.
 - **Select Multiple**: ON
 - **Prompt**: `Homework today?`
 
-**4. `If`**
-
-- Input: `Chosen Items`
-- Condition: **has any value**
-
-This is what makes "no homework today" a silent no-op instead of an error.
-
-**5. `Repeat with Each`** — place this *inside* the If block
+**4. `Repeat with Each`**
 
 - Input: `Chosen Items`
 
-**6. `Add New Reminder`** — inside the Repeat block
+It appears as a pair — `Repeat with Each` on top, `End Repeat` below, with a gap
+between them.
 
-- Title: `Repeat Item` followed by the word ` homework`
-  (so it reads `Chemistry homework`)
+**5. `Add New Reminder`** — inside the Repeat block
+
+Newly added actions usually land *below* `End Repeat`, which is wrong. Press and
+hold it and drag it up into the gap so it sits between the two and looks
+indented.
+
+- Title: tap the field, tap `Repeat Item` from the variable bar above the
+  keyboard, then type a space and the word `homework` — so it reads
+  `Repeat Item homework` and produces *Chemistry homework* at run time
 - List: `School`
-- Tap the alert row, turn on **Remind me on a day**, and set the date field to
-  the `Date` variable from step 2
+- Tap the action's ⌄ arrow to expand it, turn on **Remind me on a day**, and set
+  the date field to the `Date` variable from step 2
 
-**7. `Show Notification`** — inside the If, after the Repeat block ends
+> An earlier version of this guide wrapped these two actions in an `If` checking
+> that `Chosen Items` **has any value**, followed by a `Show Notification`. Both
+> were dropped. `Repeat with Each` over an empty selection already runs zero
+> times and ends silently, so the `If` bought nothing but a second level of
+> drag-and-drop nesting, which is genuinely painful to arrange on a phone.
 
-- Text: `Homework added to your School list`
+### Test it
+
+Tap **▶** at the bottom. Pick two classes, tap Done, then open Reminders — both
+should be sitting in `School` with an alert set for your chosen time.
 
 ### Schedule it
 
