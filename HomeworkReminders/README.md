@@ -222,48 +222,67 @@ New shortcut, named `Canvas Sync`:
 **1. `Find Calendar Events`**
 
 - Filter: **Calendar** `is` `Canvas`
-- Add a second filter: **Start Date** `is within` `the next` `7` `days`
-- Sort by: **Start Date**
+- Add a second filter: **Start Date** `is in the next` `7` `days`
 
 **2. `Repeat with Each`**
 
 - Input: `Calendar Events`
 
-Everything below goes inside the Repeat block.
+Everything below goes inside this block. Newly added actions land at the bottom
+of the shortcut, so you'll drag each one up into place. A shortcut: add all the
+actions first, then drag `End Repeat` down to the very bottom — one drag puts
+everything inside the loop at once.
 
 **3. `Get Details of Calendar Events`**
 
 - Detail: **Title**
 - Input: `Repeat Item`
 
+If the input auto-fills as `Repeat Results`, change it — that's the collected
+output of the whole finished loop, not the event you're currently on. `Repeat
+Item` only appears as an option once the action is inside the loop, so move it
+first and set the variable second.
+
 **4. `Find Reminders`**
 
 - Filter: **List** `is` `School`
-- Add a second filter: **Name** `is` the `Title` variable from step 3
+- Filter: **Name** `is` the `Title` variable from action 3
 
 **5. `Count`**
 
-- Input: `Reminders` (the result of step 4)
+- Input: `Reminders`
 
-**6. `If`**
+**6. `If`** — the duplicate check
 
-- Input: `Count`
-- Condition: **is** `0`
+- Input: `Count`, condition **is** `0`
 
-Steps 7 and 8 go inside this If block. This is the duplicate check — if a
-reminder with that exact name already exists, nothing happens.
+Action 7 goes inside this block. Leave the `Otherwise` branch empty — "a reminder
+already exists, do nothing" is the correct behavior.
 
-**7. `Get Details of Calendar Events`**
+**7. `Add New Reminder`** — inside the If
 
-- Detail: **Start Date**
-- Input: `Repeat Item`
-
-**8. `Add New Reminder`**
-
-- Title: the `Title` variable from step 3
+- Title: the `Title` variable from action 3
 - List: `School`
-- Notes: `From Canvas`
-- Alert: **Remind me on a day**, set to the `Start Date` variable from step 7
+- Alert: **No Alert**
+
+> **Why no alert.** Setting the alert from the event's own date does not work:
+> Shortcuts rejects it with *"The alert time provided was invalid"* even when the
+> date passed in is valid and in the future (confirmed with a `Quick Look` — a
+> real date went in and was still refused). Neither `Adjust Date` nor rebuilding
+> the date through `Format Date` fixes it.
+>
+> Nothing is actually lost. Layer 1 already puts every Canvas due date in the
+> **Calendar** app, so Calendar answers *when* and this list answers *what*.
+> Reminders you log yourself through layer 2 keep their 7:00 PM alert, since that
+> path sets the alert from a `Date` action and works fine.
+
+### Test it
+
+Tap **▶** and check Reminders. Your Canvas assignments should be in `School`.
+
+Then **run it a second time**. The count must not double — that's the duplicate
+check in action 6 doing its job. If items do duplicate, the `Name` filter in
+action 4 isn't matching the `Title` variable.
 
 ### Schedule it
 
