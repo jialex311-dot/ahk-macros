@@ -121,12 +121,20 @@ activation, server tick and ping all add to the real figure. Being even 300ms sh
 is enough to break the rhythm: the press lands before the server thinks the spell is
 up, gets eaten, and the cast comes out late a cycle or two later.
 
-So measure it instead of guessing. In game, press **F8** the moment the spell goes
-off, then **F8** again the moment the cooldown icon clears. The macro works out the
-real cycle, writes it to both slots and restarts the rotation. The panel shows the
-measured figure, and the cycle length is on the bottom line.
+So measure it instead of guessing:
 
-Measurements under 0.5s or over 60s are rejected as misclicks.
+1. Stand in a dungeon with the macro stopped.
+2. Press **F8** — the macro casts the spell itself and starts the clock. It does the
+   casting so the clock starts on the exact keypress rather than on your reaction.
+3. Watch the spell icon. Press **F8** again the moment it lights up.
+
+The panel counts up while timing and shows the result. The figure is written to every
+slot holding the spell that was timed — a slot with a different spell is left alone —
+and the rotation restarts. There is a **Measure cooldown now** button in settings that
+does the same thing.
+
+Being slightly late on the second press only makes the figure slightly generous, which
+is the safe direction. Measurements under 0.5s or over 60s are rejected as misclicks.
 
 To check whether one slot is misbehaving on its own, untick Slot 1 in settings and
 watch Slot 2 fire alone, then swap.

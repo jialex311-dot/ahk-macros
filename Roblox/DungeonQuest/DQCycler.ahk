@@ -75,7 +75,7 @@ CFG := {
 ENG := { on:false, castUntil:0, nextAct:0, slots:[],
          typing:false, typingSince:0, resumeAt:0,
          panelOn:true, lastState:"", set:"",
-         calT:0, calWas:false, calMsg:"" }
+         calT:0, calWas:false, calMsg:"", calSpell:"" }
 
 LoadIni()
 RebuildSlots()
@@ -102,29 +102,47 @@ F10::TogglePanel()
 
 ; ─────────────────────────── ENGINE ───────────────────────────
 
-; The macro cannot see cooldowns, so let the player time one for it:
-; F8 when the spell goes off, F8 again the moment the icon clears.
+; The macro cannot see cooldowns, so the player times one for it.
+;
+; The first F8 casts the spell ITSELF rather than asking the player to
+; press F8 and Q together - the clock then starts on the exact keypress,
+; which is what the schedule is measured from. The second F8 is when the
+; icon lights up again. A late second press only makes the figure slightly
+; generous, which is the safe direction to be wrong in.
 Calibrate() {
     if (!ENG.calT) {
         ENG.calWas := ENG.on
         ENG.on := false
         ReleaseKeys()
-        ENG.calT := A_TickCount
         ENG.calMsg := ""
+        ENG.calSpell := ""
+        if (ENG.slots.Length >= 1) {
+            ENG.calSpell := ENG.slots[1].spell
+            ENG.calT := A_TickCount
+            Cast(ENG.slots[1].key)
+        } else {
+            ENG.calT := A_TickCount
+        }
         return
     }
     span := A_TickCount - ENG.calT
     ENG.calT := 0
     if (span >= 500 && span <= 60000) {
+        hit := 0
         for def in CFG.slots {
+            ; only rewrite slots holding the spell we actually timed
+            if (ENG.calSpell != "" && def.spell != ENG.calSpell)
+                continue
             cd := span - def.cast - Margin()
             def.cd := (cd < 100) ? 100 : cd
+            hit += 1
         }
         RebuildSlots()
         SaveIni()
-        ENG.calMsg := "measured " . Format("{:.2f}", span / 1000) . "s"
+        ENG.calMsg := "measured " . Format("{:.2f}", span / 1000) . "s  -  set on "
+            . hit . ((hit = 1) ? " slot" : " slots")
     } else {
-        ENG.calMsg := "out of range - try again"
+        ENG.calMsg := "too " . ((span < 500) ? "quick" : "long") . " - try again"
     }
     ENG.on := ENG.calWas
     if (ENG.on)
@@ -360,7 +378,8 @@ RefreshPanel() {
 
     if (ENG.calT) {
         state := "TIMING", colour := CL.warn
-        note := "press F8 again when the cooldown clears"
+        note := Format("{:.1f}", (A_TickCount - ENG.calT) / 1000)
+            . "s - press F8 when the icon lights up"
     } else if (!ENG.on) {
         state := "STOPPED", colour := CL.stop
         note := (ENG.calMsg != "") ? ENG.calMsg : "press F6 to start"
@@ -484,11 +503,13 @@ OpenSettings() {
 
     g.SetFont("s8 Norm c7A828E", "Segoe UI")
     g.Add("Text", "xm y+10 w380 h44",
-        "Casts coming out late after a few cycles means this number is shorter than the`n"
-        . "real cooldown. Even 300ms off is enough to break the rhythm. Press F8 in game`n"
-        . "to measure it exactly, or raise it 250ms at a time until the hiccup stops.")
+        "These are guesses and the real cooldown is longer - activation, server tick and`n"
+        . "ping all add on. Even 300ms off breaks the rhythm, so measure it instead: the`n"
+        . "button below casts the spell, then you press F8 when the icon lights up again.")
+    g.SetFont("s9 Norm", "Segoe UI")
+    g.Add("Button", "xm y+10 w186 h28 vBtCal", "Measure cooldown now  (F8)")
     g.SetFont("s8 Norm cFFC542", "Segoe UI")
-    g.Add("Text", "xm y+8 w380 h30 vWarn", "")
+    g.Add("Text", "xm y+10 w380 h30 vWarn", "")
 
     Head(g, "CONNECTION")
     g.SetFont("s9 Norm cD5DAE3", "Segoe UI")
@@ -534,6 +555,7 @@ OpenSettings() {
     g["CbOn1"].OnEvent("Click", (c, *) => SettingsWarn(c.Gui))
     g["CbOn2"].OnEvent("Click", (c, *) => SettingsWarn(c.Gui))
     SettingsWarn(g)
+    g["BtCal"].OnEvent("Click", SettingsMeasure)
     g["BtSave"].OnEvent("Click", SettingsSave)
     g["BtReset"].OnEvent("Click", SettingsReset)
     g["BtClose"].OnEvent("Click", SettingsClose)
@@ -660,6 +682,11 @@ SettingsReset(ctrl, *) {
     SaveIni()
     SettingsClose(ctrl)
     OpenSettings()
+}
+
+SettingsMeasure(ctrl, *) {
+    SettingsClose(ctrl)
+    Calibrate()
 }
 
 SettingsClose(ctrl, *) {
