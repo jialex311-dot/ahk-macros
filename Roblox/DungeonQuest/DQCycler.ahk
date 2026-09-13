@@ -9,8 +9,11 @@
 ; keys are spammed so a dropped input never costs you a cast.
 ;
 ;   F6  start / stop          F4   settings
-;   F8  measure cooldown      F10  hide panel
+;   F2  measure cooldown      F10  hide panel
 ;   Shift+Esc  quit
+;
+; Keys are editable in settings, and the tray icon carries the same
+; actions - Roblox keeps F8 and F9 for itself.
 ;
 ; Everything is configurable in the settings window (F4) and saved to
 ; DQCycler.ini next to this script.
@@ -154,21 +157,19 @@ TrayExit(*)     => ExitApp()
 
 ; ─────────────────────────── ENGINE ───────────────────────────
 
-; The macro cannot see cooldowns, so the player times one for it.
+; ── Reading the spell icon ──
 ;
-; The first F8 casts the spell ITSELF rather than asking the player to
-; press F8 and Q together - the clock then starts on the exact keypress,
-; which is what the schedule is measured from. The second F8 is when the
-; icon lights up again. A late second press only makes the figure slightly
-; generous, which is the safe direction to be wrong in.
-; The cooldown is a wipe, not a uniform dim, so the centre of the icon
-; clears about halfway through. Sample a grid across the WHOLE icon and
-; keep each point's own resting brightness: the spell is only back when
-; every point has returned, whichever way the wipe travels.
-; Diamond, not a square grid: a square's corners sit 1.4x further from the
-; centre than its edges, so they would fall outside a rounded icon and read
-; the game world behind it. Every point here stays within `size` of centre,
-; while still spanning the icon's full height for a vertical wipe.
+; The macro cannot see cooldowns, so it watches the icon instead.
+;
+; The cooldown clears as a wipe rather than a uniform dim, so the centre of
+; the icon comes back around halfway through. Sampling spans the WHOLE icon
+; and keeps each point's own resting brightness: the spell counts as back
+; only once every point has returned, whichever way the wipe travels.
+;
+; A diamond, not a square grid - a square's corners sit 1.4x further from
+; the centre than its edges, so on a rounded icon they would fall outside it
+; and read the game world behind. Every point here stays within `size` of
+; the centre while still spanning the icon's full height.
 ICON_PTS := [[0,0], [-0.5,0], [0.5,0], [-1,0], [1,0],
              [0,-0.5], [0,0.5], [0,-1], [0,1],
              [-0.5,-0.5], [0.5,-0.5], [-0.5,0.5], [0.5,0.5]]
@@ -309,6 +310,11 @@ AutoMeasure() {
     ENG.on := ENG.calWas
 }
 
+;   with an icon spot set : one keypress, fully automatic
+;   without one           : press once to cast and start the clock, again
+;                           when the icon lights up. A late second press
+;                           only reads slightly generous, which is the safe
+;                           direction to be wrong in.
 Calibrate(*) {
     if (!ENG.calT && CFG.iconX >= 0 && CFG.iconY >= 0) {
         AutoMeasure()
