@@ -65,10 +65,69 @@ How it works:
 
 ---
 
+## Roblox / Dungeon Quest
+
+### AbilityCycle
+
+Auto-cycles your two spell slots (`Q` and `E`) for carrying lower dungeons.
+
+The point is the stagger. Run the same carry spell in both slots and the macro
+times the opener off the spell's activation animation — slot 2 goes out the
+instant slot 1 finishes casting — so the two cooldowns stay permanently offset
+and one spell is always going out. Once that offset is set, the keys just get
+spammed; presses that land on cooldown do nothing, so the rotation holds itself
+together without you tracking it.
+
+#### Default Keybinds
+- `F6` — Toggle on/off
+- `F7` — Next profile (Mage / Warrior)
+- `F8` — Next mode (cycle / spam / mash)
+- `Shift+Esc` — Exit script
+
+#### Profiles
+
+| Profile | Spell | Activation | Listed CD | Full cycle |
+| --- | --- | --- | --- | --- |
+| Mage | Pulse Waves | 1.0s | 4s | 5.0s |
+| Warrior | Arrow Rain | 0.5s | 4s | 4.5s |
+
+Both slots default to the same spell, which is the normal carry setup. To run
+two different spells, just give `q` and `e` their own `cast` / `cd` values in
+the `PROFILES` block — the scheduler handles uneven cooldowns fine.
+
+#### Modes
+- `cycle` — one press per spell, fired exactly on cooldown. Tightest, but a
+  single dropped input costs you that cast.
+- `spam` — timed opener, then taps in a burst starting 300ms before each spell
+  comes up. Same cast timing as `cycle`, just forgiving about dropped inputs.
+  **Default.**
+- `mash` — timed opener, then blind `Q`/`E` alternation forever. Use only if
+  the other two misbehave.
+
+#### Settings
+Inside `AbilityCycle.ahk`:
+- `GAME_WINDOW` — only fires while Roblox is focused. Set to `""` to disable the
+  check if the script does nothing on your setup.
+- `MARGIN_MS` (70) — pad added to every cooldown to cover ping and server tick.
+  Lower it on good ping to tighten the rotation; raise it if casts get eaten.
+- `LEAD_MS` / `GAP_MS` — how early and how often `spam` mode taps.
+- `HOLD_MS` (40) — key hold duration. Raise it if Roblox drops inputs.
+- `CLICK_AFTER_CAST` — adds a left-click after each cast, for spells that need
+  a placement click.
+- If Roblox ignores the keys entirely, change `SendMode("Input")` near the top to
+  `SendMode("Event")` and run AutoHotkey as administrator.
+
+#### Notes
+- The overlay tooltip needs Roblox in **windowed or borderless** mode; exclusive
+  fullscreen will draw over it.
+- `MARGIN_MS` and `HOLD_MS` mean each cycle runs ~110ms longer than the spell's
+  true cooldown. That is deliberate slack, not drift — it does not accumulate.
+
 ## Requirements
 
 ### General
-- AutoHotkey v1
+- AutoHotkey v1 — `PressureJump`, `Clip`
+- AutoHotkey v2 — `PressureJumpV2`, `AbilityCycle`
 
 ### Additional Requirements
 - Spencer Macro Utilities (required for `Clip`)
