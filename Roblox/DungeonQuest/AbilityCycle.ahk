@@ -6,7 +6,7 @@
 ; going out: the opener is timed off the cast animation, then the keys
 ; get spammed so nothing is ever missed by a few ms.
 ;
-; F6 = on/off | F7 = profile | F8 = mode | Shift+Esc = quit
+; F6 = on/off | F7 = profile | F8 = mode | F10 = hide panel | Shift+Esc = quit
 
 #SingleInstance Force
 SetWorkingDir(A_ScriptDir)
@@ -37,7 +37,10 @@ MASH_MS   := 90   ; mash mode: delay between alternating taps
 TICK_MS   := 10   ; scheduler resolution
 
 CLICK_AFTER_CAST := false  ; also left-click after each cast (placement spells)
-SHOW_STATUS      := true   ; tooltip on toggle / profile / mode change
+
+SHOW_PANEL := true   ; on-screen status panel (drag it anywhere, F10 hides it)
+PANEL_X    := 20     ; starting position
+PANEL_Y    := 20
 
 ; cast = spell activation time, cd = the cooldown listed on the spell.
 ; Total spell cycle = cast + cd.
@@ -65,13 +68,19 @@ MODES := ["cycle", "spam", "mash"]
 ENG := { on: false, p: 0, mode: START_MODE, castUntil: 0, nextAct: 0, mashIdx: 1, slots: [] }
 
 LoadProfile(START_PROFILE)
-Status(StatusText("OFF"))
+PANEL := SHOW_PANEL ? BuildPanel() : ""
+ENG.panelOn := SHOW_PANEL
+ENG.lastState := ""
 OnExit(Cleanup)
+OnMessage(0x0201, DragPanel)
 SetTimer(Tick, TICK_MS)
+SetTimer(RefreshPanel, 100)
+RefreshPanel()
 
 F6::Toggle()
 F7::NextProfile()
 F8::NextMode()
+F10::TogglePanel()
 +Escape::ExitApp()
 
 Tick() {
@@ -190,7 +199,6 @@ Toggle() {
         ResetCycle()
     else
         ReleaseKeys()
-    Status(StatusText(ENG.on ? "ON" : "OFF"))
 }
 
 NextProfile() {
@@ -199,7 +207,6 @@ NextProfile() {
     ReleaseKeys()
     LoadProfile(Mod(ENG.p, PROFILES.Length) + 1)
     ENG.on := was
-    Status(StatusText(ENG.on ? "ON" : "OFF"))
 }
 
 NextMode() {
@@ -212,30 +219,103 @@ NextMode() {
     }
     ENG.mode := MODES[Mod(i, MODES.Length) + 1]
     ResetCycle()
-    Status(StatusText(ENG.on ? "ON" : "OFF"))
 }
 
-StatusText(state) {
-    keys := ""
-    for s in ENG.slots
-        keys .= ((keys = "") ? "" : " / ") . StrUpper(s.key)
-    t := "Dungeon Quest cycler: " . state . "`n"
-    t .= "Profile: " . PROFILES[ENG.p].name . "`n"
-    t .= "Mode: " . ENG.mode . "`n"
-    t .= "Keys: " . keys . "`n"
-    t .= "F6 on/off | F7 profile | F8 mode | Shift+Esc quit"
-    return t
+BuildPanel() {
+    g := Gui("-Caption +AlwaysOnTop +ToolWindow +E0x08000000", "DQ Cycler")
+    g.BackColor := "16181D"
+    g.MarginX := 14
+    g.MarginY := 12
+
+    g.SetFont("s8 cA0A6B0", "Segoe UI")
+    g.Add("Text", "xm ym w206", "DUNGEON QUEST CYCLER")
+
+    g.SetFont("s17 Bold cFF5555")
+    g.Add("Text", "xm y+2 w206 vState", "STOPPED")
+
+    g.SetFont("s8 Norm c7A828E")
+    g.Add("Text", "xm y+4 w206 h15 vNote", "press F6 to start")
+
+    g.SetFont("s10 Norm cE8EAED")
+    g.Add("Text", "xm y+10 w206 vProfile", "-")
+    g.SetFont("s9 c9AA2AE")
+    g.Add("Text", "xm y+3 w206 vMode", "-")
+
+    g.SetFont("s10 Bold cE8EAED", "Consolas")
+    g.Add("Text", "xm y+10 w206 h36 vSlots", "")
+
+    g.SetFont("s8 Norm c6C7480", "Segoe UI")
+    g.Add("Text", "xm y+8 w206", "F6 start/stop     F7 profile`nF8 mode           F10 hide")
+
+    g.Show("x" . PANEL_X . " y" . PANEL_Y . " AutoSize NoActivate")
+    return g
 }
 
-Status(text) {
-    if (!SHOW_STATUS)
+RefreshPanel() {
+    if (!IsObject(PANEL) || !ENG.panelOn)
         return
-    ToolTip(text)
-    SetTimer(HideTip, -2000)
+
+    if (!ENG.on) {
+        state := "STOPPED", colour := "cFF5555", note := "press F6 to start"
+    } else if (GAME_WINDOW != "" && !WinActive(GAME_WINDOW)) {
+        state := "WAITING", colour := "cFFC542", note := "Roblox is not the active window"
+    } else {
+        state := "RUNNING", colour := "c46D160", note := "casting"
+    }
+
+    if (state != ENG.lastState) {
+        ENG.lastState := state
+        try {
+            PANEL["State"].Opt(colour)
+            PANEL["State"].Text := state
+            PANEL["State"].Redraw()
+        } catch {
+            PANEL["State"].Text := state
+        }
+    }
+    PANEL["Note"].Text := note
+    PANEL["Profile"].Text := PROFILES[ENG.p].name
+    PANEL["Mode"].Text := "mode: " . ENG.mode
+
+    now := A_TickCount
+    lines := ""
+    for slot in ENG.slots {
+        left := slot.readyAt + MARGIN_MS - now
+        if (!ENG.on)
+            bar := "-"
+        else if (now < slot.readyAt - slot.cd)
+            bar := "casting"
+        else if (left <= 0)
+            bar := "READY"
+        else
+            bar := Format("{:.1f}s", left / 1000)
+        lines .= ((lines = "") ? "" : "`n") . StrUpper(slot.key) . "   " . bar
+    }
+    PANEL["Slots"].Text := lines
 }
 
-HideTip() {
-    ToolTip()
+TogglePanel() {
+    if (!IsObject(PANEL))
+        return
+    ENG.panelOn := !ENG.panelOn
+    if (ENG.panelOn) {
+        PANEL.Show("NoActivate")
+        RefreshPanel()
+    } else {
+        PANEL.Hide()
+    }
+}
+
+DragPanel(wp, lp, msg, hwnd) {
+    if (!IsObject(PANEL))
+        return
+    owner := GuiFromHwnd(hwnd, true)
+    if (owner && owner.Hwnd = PANEL.Hwnd)
+        try {
+            PostMessage(0xA1, 2, 0, , "ahk_id " . PANEL.Hwnd)
+        } catch {
+            return
+        }
 }
 
 Cleanup(*) {

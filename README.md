@@ -82,6 +82,7 @@ together without you tracking it.
 - `F6` — Toggle on/off
 - `F7` — Next profile (Mage / Warrior)
 - `F8` — Next mode (cycle / spam / mash)
+- `F10` — Show/hide the status panel
 - `Shift+Esc` — Exit script
 
 #### Profiles
@@ -117,9 +118,23 @@ Inside `AbilityCycle.ahk`:
 - If Roblox ignores the keys entirely, change `SendMode("Input")` near the top to
   `SendMode("Event")` and run AutoHotkey as administrator.
 
+#### Status panel
+An always-on-top panel shows whether it is running, the active profile and mode,
+and a live cooldown readout per slot. Drag it anywhere; `F10` hides it. It never
+takes focus, so it will not knock you out of Roblox.
+
+The state line is the thing to watch:
+- `STOPPED` — idle, press `F6`.
+- `WAITING` — running, but Roblox is not the focused window so nothing is being
+  sent. This is what you will see if you tab out.
+- `RUNNING` — actively casting.
+
+Set `SHOW_PANEL := false` to turn it off, or move `PANEL_X` / `PANEL_Y` to change
+where it opens.
+
 #### Notes
-- The overlay tooltip needs Roblox in **windowed or borderless** mode; exclusive
-  fullscreen will draw over it.
+- The panel needs Roblox in **windowed or borderless** mode; exclusive fullscreen
+  will draw over it.
 - `MARGIN_MS` and `HOLD_MS` mean each cycle runs ~110ms longer than the spell's
   true cooldown. That is deliberate slack, not drift — it does not accumulate.
 
