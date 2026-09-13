@@ -9,7 +9,7 @@
 ; keys are spammed so a dropped input never costs you a cast.
 ;
 ;   F6  start / stop          F4   settings
-;   F10 hide panel            Shift+Esc  quit
+;   F8  measure cooldown      F10  hide panel
 ;   Shift+Esc  quit
 ;
 ; Everything is configurable in the settings window (F4) and saved to
@@ -74,7 +74,8 @@ CFG := {
 
 ENG := { on:false, castUntil:0, nextAct:0, slots:[],
          typing:false, typingSince:0, resumeAt:0,
-         panelOn:true, lastState:"", set:"" }
+         panelOn:true, lastState:"", set:"",
+         calT:0, calWas:false, calMsg:"" }
 
 LoadIni()
 RebuildSlots()
@@ -88,6 +89,7 @@ RefreshPanel()
 
 F6::Toggle()
 F4::OpenSettings()
+F8::Calibrate()
 F10::TogglePanel()
 +Escape::ExitApp()
 
@@ -99,6 +101,35 @@ F10::TogglePanel()
 #HotIf
 
 ; ─────────────────────────── ENGINE ───────────────────────────
+
+; The macro cannot see cooldowns, so let the player time one for it:
+; F8 when the spell goes off, F8 again the moment the icon clears.
+Calibrate() {
+    if (!ENG.calT) {
+        ENG.calWas := ENG.on
+        ENG.on := false
+        ReleaseKeys()
+        ENG.calT := A_TickCount
+        ENG.calMsg := ""
+        return
+    }
+    span := A_TickCount - ENG.calT
+    ENG.calT := 0
+    if (span >= 500 && span <= 60000) {
+        for def in CFG.slots {
+            cd := span - def.cast - Margin()
+            def.cd := (cd < 100) ? 100 : cd
+        }
+        RebuildSlots()
+        SaveIni()
+        ENG.calMsg := "measured " . Format("{:.2f}", span / 1000) . "s"
+    } else {
+        ENG.calMsg := "out of range - try again"
+    }
+    ENG.on := ENG.calWas
+    if (ENG.on)
+        ResetCycle()
+}
 
 Margin() {
     return (CFG.ping > MARGIN_FLOOR) ? CFG.ping : MARGIN_FLOOR
@@ -327,8 +358,12 @@ RefreshPanel() {
     if (!IsObject(PANEL) || !ENG.panelOn)
         return
 
-    if (!ENG.on) {
-        state := "STOPPED", colour := CL.stop, note := "press F6 to start"
+    if (ENG.calT) {
+        state := "TIMING", colour := CL.warn
+        note := "press F8 again when the cooldown clears"
+    } else if (!ENG.on) {
+        state := "STOPPED", colour := CL.stop
+        note := (ENG.calMsg != "") ? ENG.calMsg : "press F6 to start"
     } else if (ENG.typing) {
         state := "TYPING", colour := CL.chat, note := "chat is open - paused"
     } else if (CFG.focusGuard && !WinActive(GAME_WIN)) {
@@ -351,7 +386,8 @@ RefreshPanel() {
     }
     PANEL["Note"].Text := note
     PANEL["Profile"].Text := SetupName()
-    PANEL["Foot"].Text := "ping " . CFG.ping . "ms          F6 start / stop"
+    PANEL["Foot"].Text := "ping " . CFG.ping . "ms      cycle "
+        . Format("{:.2f}", CycleSpan() / 1000) . "s      F6 start/stop"
 
     now := A_TickCount
     span := CycleSpan()
@@ -441,12 +477,18 @@ OpenSettings() {
     g.Add("Text", "x+6 yp w44 Center", "key")
     g.Add("Text", "x+6 yp w62 Center", "activation")
     g.Add("Text", "x+6 yp w62 Center", "cooldown")
+    g.SetFont("s8 Norm c7A828E", "Segoe UI")
 
     SlotRow(g, 1)
     SlotRow(g, 2)
 
+    g.SetFont("s8 Norm c7A828E", "Segoe UI")
+    g.Add("Text", "xm y+10 w380 h44",
+        "Casts coming out late after a few cycles means this number is shorter than the`n"
+        . "real cooldown. Even 300ms off is enough to break the rhythm. Press F8 in game`n"
+        . "to measure it exactly, or raise it 250ms at a time until the hiccup stops.")
     g.SetFont("s8 Norm cFFC542", "Segoe UI")
-    g.Add("Text", "xm y+10 w380 h30 vWarn", "")
+    g.Add("Text", "xm y+8 w380 h30 vWarn", "")
 
     Head(g, "CONNECTION")
     g.SetFont("s9 Norm cD5DAE3", "Segoe UI")

@@ -98,6 +98,7 @@ being lost for a whole cycle.
 #### Keybinds
 - `F6` — Start/stop
 - `F4` — Settings
+- `F8` — Measure your real cooldown
 - `F10` — Show/hide the panel
 - `Shift+Esc` — Exit
 
@@ -114,12 +115,21 @@ Saved to `DQCycler.ini` next to the script and reloaded on startup.
 Known spells: Pulse Waves (1.0s + 4s, mage) and Arrow Rain (0.5s + 4s, war). Pick
 **Custom** to type activation and cooldown for anything else.
 
-**If casts are being skipped**, the cooldown figure is too short — the press lands
-before the server agrees the spell is up and gets eaten. Raise the catch-up window
-first, then add 250ms at a time to the cooldown until the skipping stops.
+#### Measuring your cooldown (`F8`)
+This is the number everything else depends on, and the listed cooldown is not it —
+activation, server tick and ping all add to the real figure. Being even 300ms short
+is enough to break the rhythm: the press lands before the server thinks the spell is
+up, gets eaten, and the cast comes out late a cycle or two later.
 
-To find out whether one slot is misbehaving on its own, untick Slot 1 and watch
-Slot 2 fire alone, then swap. Each slot should cast once per full cycle.
+So measure it instead of guessing. In game, press **F8** the moment the spell goes
+off, then **F8** again the moment the cooldown icon clears. The macro works out the
+real cycle, writes it to both slots and restarts the rotation. The panel shows the
+measured figure, and the cycle length is on the bottom line.
+
+Measurements under 0.5s or over 60s are rejected as misclicks.
+
+To check whether one slot is misbehaving on its own, untick Slot 1 in settings and
+watch Slot 2 fire alone, then swap.
 
 #### Set your ping
 Find it in Roblox under **Esc > Settings > Performance Stats**. The macro cannot
