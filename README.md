@@ -69,6 +69,106 @@ How it works:
 
 ### DQCycler
 
+Cycles two spell slots so one spell is always going out, for carrying lower
+dungeons.
+
+#### The slots must hold DIFFERENT spells
+Dungeon Quest shares one cooldown per spell. Put Pulse Waves in both slots and
+the second copy will never fire — you get one cast per cooldown, exactly what a
+single key already gives you. The macro cannot fix this; no timing works around
+a shared cooldown.
+
+Put a **different** spell in each slot and the cooldowns are independent, so the
+two genuinely alternate. Pulse Waves and Arrow Rain both carry a speed boost, so
+one in each slot keeps that boost up permanently. The settings window warns you
+if both slots hold the same spell.
+
+#### How the spacing works
+Both slots are locked to the **slowest** spell's period and phased half a cycle
+apart. Letting each fire as fast as it can would let the two drift in and out of
+phase and periodically clump; a shared period holds the spacing at period/N
+forever, which is what a timed buff needs.
+
+Measured with Pulse Waves + Arrow Rain: beats `QEQEQEQE`, worst gap **2603ms**.
+Any buff lasting longer than that never drops. With slot 2 disabled it falls back
+to `QQQ` at 5058ms — one spell, perfect uptime, no cycling.
+
+Each beat gets a burst of keypresses rather than one, and tapping continues
+through a **catch-up window** after the beat. If a press is swallowed because the
+spell was not quite up, the next tap catches it ~70ms later instead of the cast
+being lost for a whole cycle.
+
+#### Keybinds
+- `F6` — Start/stop
+- `F4` — Settings
+- `F10` — Show/hide the panel
+- `Shift+Esc` — Exit
+
+#### Settings (`F4`)
+Saved to `DQCycler.ini` next to the script and reloaded on startup.
+
+| Section | What's in it |
+| --- | --- |
+| Spells | Per slot: enable, spell, key, activation, cooldown |
+| Connection | Your ping |
+| Behaviour | Chat guard, focus guard, click-after-cast, show panel |
+| Advanced | hold / lead / gap / catch-up window |
+
+Known spells: Pulse Waves (1.0s + 4s) and Arrow Rain (0.5s + 4s). Pick **Custom**
+to type activation and cooldown for anything else.
+
+#### Set your ping
+Find it in Roblox under **Esc > Settings > Performance Stats**. The macro cannot
+see your real cooldowns, so it pads every one by this much before pressing. Too
+low and the press lands before the server agrees the spell is up. If casts still
+get skipped, raise the catch-up window first, then the cooldown figure.
+
+#### Chat guard
+Opening Roblox chat pauses the macro so your spell keys never land in the chat
+box. It watches `/` and `Enter` to catch chat opening and `Enter` or `Esc` to
+catch it closing. Those keys still reach Roblox normally — the macro only
+listens. A 20s failsafe force-resumes if a close is ever missed.
+
+#### Panel
+Always-on-top, shows run state, the spells in play, your ping, and a live bar per
+slot. Drag it anywhere — position is remembered. `F10` hides it, and it never
+takes focus.
+
+- `STOPPED` — idle, press `F6`.
+- `RUNNING` — casting.
+- `TYPING` — chat is open, paused.
+- `WAITING` — Roblox is not the focused window, so nothing is being sent.
+
+#### Notes
+- The panel needs Roblox in **windowed or borderless** mode.
+- Press `F6` with both spells off cooldown.
+- If Roblox ignores the keys entirely, change `SendMode("Input")` near the top to
+  `SendMode("Event")` and run AutoHotkey as administrator.
+
+---
+
+## Requirements
+- Spencer Macro Utilities
+- Freeze keybind set to `Middle Mouse Button`
+- `240+ FPS` recommended
+
+##### Default Keybinds
+- `F1` — Activate script
+- `F4` — Exit script
+
+##### FPS Notes
+- Tested at:
+  - `60 FPS`
+  - `240 FPS`
+- Works significantly better at higher FPS.
+- FPS values between 60 and 240 have not been thoroughly tested.
+
+---
+
+## Roblox / Dungeon Quest
+
+### DQCycler
+
 Auto-cycles your two spell slots for carrying lower dungeons.
 
 The point is the spacing. Run the same carry spell in both slots and the macro

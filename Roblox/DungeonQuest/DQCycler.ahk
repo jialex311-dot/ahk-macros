@@ -9,7 +9,7 @@
 ; keys are spammed so a dropped input never costs you a cast.
 ;
 ;   F6  start / stop          F4   settings
-;   F7  next profile          F10  hide panel
+;   F10 hide panel            Shift+Esc  quit
 ;   Shift+Esc  quit
 ;
 ; Everything is configurable in the settings window (F4) and saved to
@@ -34,9 +34,13 @@ BAR_W        := 148    ; cooldown bar width in px
 CHAT_TIMEOUT := 20000  ; force-resume if chat never reports closing
 RESUME_MS    := 300    ; settling time after chat closes
 
-PRESETS := [
-    { name: "Mage - Pulse Waves",   cast: 1000, cd: 4000 },
-    { name: "Warrior - Arrow Rain", cast: 500,  cd: 4000 }
+; Each slot holds its own spell. Two copies of the SAME spell share one
+; cooldown in Dungeon Quest, so the second copy never fires - the slots
+; have to hold different spells for cycling to buy anything.
+SPELLS := [
+    { name: "Pulse Waves", cast: 1000, cd: 4000 },
+    { name: "Arrow Rain",  cast: 500,  cd: 4000 },
+    { name: "Custom",      cast: 1000, cd: 4000 }
 ]
 
 CL := { bg:"0E1015", sunk:"1B2029", dim:"4A5162", mid:"6B7280",
@@ -48,15 +52,15 @@ CL := { bg:"0E1015", sunk:"1B2029", dim:"4A5162", mid:"6B7280",
 
 CFG := {
     ping: 70,
-    profile: 1,
-    slots: [ { key:"q", cast:1000, cd:4000 },
-             { key:"e", cast:1000, cd:4000 } ],
+    slots: [ { key:"q", spell:"Pulse Waves", cast:1000, cd:4000, on:true },
+             { key:"e", spell:"Arrow Rain",  cast:500,  cd:4000, on:true } ],
     chatGuard: true,
     focusGuard: true,
     clickAfter: false,
     hold: 40,
     lead: 300,
     gap: 70,
+    catchup: 1500,
     panelX: 20,
     panelY: 20,
     showPanel: true
@@ -77,7 +81,6 @@ SetTimer(RefreshPanel, 80)
 RefreshPanel()
 
 F6::Toggle()
-F7::NextProfile()
 F4::OpenSettings()
 F10::TogglePanel()
 +Escape::ExitApp()
@@ -133,24 +136,36 @@ Step() {
     if (now < ENG.nextAct)
         return
 
-    ; never touch a key while a cast animation is still playing - that is
-    ; what keeps the two slots from stepping on each other
+    span := CycleSpan()
+
+    ; Each slot fires on its own beat. Beats are a fixed metronome rather
+    ; than being rescheduled off the last press, so one swallowed cast can
+    ; never push the whole rotation a cycle late.
+    for slot in ENG.slots {
+        guard := 0
+        while (slot.on && now > slot.due + CFG.catchup && guard++ < 200) {
+            slot.due += span
+            slot.beatDone := false
+        }
+    }
+
     if (now < ENG.castUntil) {
         ENG.nextAct := ENG.castUntil
         return
     }
 
-    pad := Margin()
     pick := 0
     best := 0
     for i, slot in ENG.slots {
-        due := slot.readyAt + pad
         ; no early spam before a slot's first cast - it is genuinely off
         ; cooldown then, so an early tap would fire it and break the spacing
+        if (!slot.on)
+            continue
         lead := (slot.casts > 0) ? CFG.lead : 0
-        if (now >= due - lead && (pick = 0 || due < best)) {
+        if (now >= slot.due - lead && now <= slot.due + CFG.catchup
+            && (pick = 0 || slot.due < best)) {
             pick := i
-            best := due
+            best := slot.due
         }
     }
     if (pick = 0) {
@@ -161,19 +176,20 @@ Step() {
     slot := ENG.slots[pick]
     Cast(slot.key)
     t := A_TickCount
-    due := slot.readyAt + pad
 
-    if (t >= due) {
-        ; spell was off cooldown, so this press fired it
-        slot.readyAt := t + slot.cast + slot.cd
+    if (t >= slot.due && !slot.beatDone) {
+        slot.beatDone := true
         slot.casts += 1
         ENG.castUntil := t + slot.cast
-        ENG.nextAct := t
-    } else {
-        ; still on cooldown - keep tapping, but land the next tap on ready
-        nxt := t + CFG.gap
-        ENG.nextAct := (nxt > due) ? due : nxt
     }
+
+    ; keep tapping across the rest of the window. If that press was eaten
+    ; because the spell was not actually up yet, the next tap catches it
+    ; instead of the cast being lost for a whole cycle.
+    nxt := t + CFG.gap
+    if (!slot.beatDone && nxt > slot.due)
+        nxt := slot.due
+    ENG.nextAct := nxt
 }
 
 Cast(key) {
@@ -189,25 +205,71 @@ Cast(key) {
 RebuildSlots() {
     ENG.slots := []
     for def in CFG.slots
-        ENG.slots.Push({ key:def.key, cast:def.cast, cd:def.cd, readyAt:0, casts:0, tone:"", wide:-1 })
+        ENG.slots.Push({ key:def.key, spell:def.spell, cast:def.cast, cd:def.cd,
+                         on:def.on, due:0, beatDone:false, casts:0, tone:"", wide:-1 })
     ResetCycle()
+}
+
+ActiveCount() {
+    n := 0
+    for slot in ENG.slots {
+        if (slot.on)
+            n += 1
+    }
+    return n
+}
+
+; Both slots are locked to the SLOWEST spell's period. Firing each as fast
+; as it can go would let the two drift in and out of phase; a shared period
+; holds the spacing at period/N forever, which is what keeps a buff up.
+CycleSpan() {
+    span := 0
+    for slot in ENG.slots {
+        if (slot.on && slot.cast + slot.cd > span)
+            span := slot.cast + slot.cd
+    }
+    span += Margin()
+    return (span < 200) ? 200 : span
+}
+
+SetupName() {
+    parts := ""
+    same := true
+    first := ""
+    for slot in ENG.slots {
+        if (!slot.on)
+            continue
+        if (first = "")
+            first := slot.spell
+        else if (slot.spell != first)
+            same := false
+        parts .= ((parts = "") ? "" : " + ") . slot.spell
+    }
+    if (parts = "")
+        return "no slots enabled"
+    if (same && ActiveCount() > 1)
+        return parts . "  (shared CD!)"
+    return parts
 }
 
 ResetCycle() {
     now := A_TickCount
-    pad := Margin()
     ENG.castUntil := now
     ENG.nextAct := now
-
-    ; Spread the slots EVENLY across one cycle, so a spell goes out every
-    ; cycle/N seconds and a timed buff never has a chance to drop. Firing
-    ; them back to back instead would dump both spells inside two seconds
-    ; and leave the rest of the cycle dead.
-    span := ENG.slots[1].cast + ENG.slots[1].cd + pad
-    n := ENG.slots.Length
-    for i, slot in ENG.slots {
-        slot.readyAt := now + Round((i - 1) * span / n) - pad
+    span := CycleSpan()
+    n := ActiveCount()
+    if (n < 1)
+        n := 1
+    j := 0
+    for slot in ENG.slots {
+        slot.beatDone := false
         slot.casts := 0
+        if (!slot.on) {
+            slot.due := now + span * 999
+            continue
+        }
+        slot.due := now + Round(j * span / n)
+        j += 1
     }
 }
 
@@ -222,31 +284,6 @@ Toggle() {
         ResetCycle()
     else
         ReleaseKeys()
-}
-
-NextProfile() {
-    nxt := (CFG.profile >= 1 && CFG.profile < PRESETS.Length) ? CFG.profile + 1 : 1
-    ApplyPreset(nxt)
-    was := ENG.on
-    ENG.on := false
-    ReleaseKeys()
-    RebuildSlots()
-    ENG.on := was
-    SaveIni()
-}
-
-ApplyPreset(i) {
-    CFG.profile := i
-    for def in CFG.slots {
-        def.cast := PRESETS[i].cast
-        def.cd := PRESETS[i].cd
-    }
-}
-
-ProfileName() {
-    if (CFG.profile >= 1 && CFG.profile <= PRESETS.Length)
-        return PRESETS[CFG.profile].name
-    return "Custom setup"
 }
 
 ; ─────────────────────────── PANEL ────────────────────────────
@@ -317,22 +354,23 @@ RefreshPanel() {
         }
     }
     PANEL["Note"].Text := note
-    PANEL["Profile"].Text := ProfileName()
-    PANEL["Foot"].Text := "ping " . CFG.ping . "ms      F6 start    F7 profile"
+    PANEL["Profile"].Text := SetupName()
+    PANEL["Foot"].Text := "ping " . CFG.ping . "ms          F6 start / stop"
 
     now := A_TickCount
-    pad := Margin()
+    span := CycleSpan()
     for i, slot in ENG.slots {
         if (i > 2)
             break
-        left := slot.readyAt + pad - now
-        span := slot.cast + slot.cd + pad
-        if (!ENG.on) {
+        left := slot.due - now
+        if (!slot.on) {
+            pct := 0, txt := "off", tone := CL.sunk
+        } else if (!ENG.on) {
             pct := 0, txt := "-", tone := (i = 1) ? CL.q : CL.e
-        } else if (slot.casts > 0 && now < slot.readyAt - slot.cd) {
+        } else if (slot.beatDone && now < slot.due + slot.cast) {
             pct := 1000, txt := "casting", tone := CL.bright
         } else if (left <= 0) {
-            pct := 1000, txt := "READY", tone := CL.ready
+            pct := 1000, txt := "FIRING", tone := CL.ready
         } else {
             pct := Round(1000 * (1 - (left / span)))
             txt := Format("{:.1f}s", left / 1000)
@@ -400,24 +438,19 @@ OpenSettings() {
     g.MarginX := 18
     g.MarginY := 16
 
-    Head(g, "SPELL")
-    g.SetFont("s9 Norm cD5DAE3", "Segoe UI")
-    g.Add("Text", "xm y+6 w70", "Profile")
-    list := []
-    for pre in PRESETS
-        list.Push(pre.name)
-    list.Push("Custom setup")
-    idx := (CFG.profile >= 1 && CFG.profile <= PRESETS.Length) ? CFG.profile : list.Length
-    g.Add("DropDownList", "x+8 yp-4 w228 vDdProfile Choose" . idx, list)
-
+    Head(g, "SPELLS")
     g.SetFont("s8 Norm c7A828E", "Segoe UI")
-    g.Add("Text", "xm y+12 w70", "")
-    g.Add("Text", "x+8 yp w54 Center", "key")
-    g.Add("Text", "x+6 yp w82 Center", "activation")
-    g.Add("Text", "x+6 yp w82 Center", "cooldown")
+    g.Add("Text", "xm y+6 w64", "")
+    g.Add("Text", "x+6 yp w132 Center", "spell")
+    g.Add("Text", "x+6 yp w44 Center", "key")
+    g.Add("Text", "x+6 yp w62 Center", "activation")
+    g.Add("Text", "x+6 yp w62 Center", "cooldown")
 
-    Slot(g, 1, "Slot 1")
-    Slot(g, 2, "Slot 2")
+    SlotRow(g, 1)
+    SlotRow(g, 2)
+
+    g.SetFont("s8 Norm cFFC542", "Segoe UI")
+    g.Add("Text", "xm y+10 w380 h30 vWarn", "")
 
     Head(g, "CONNECTION")
     g.SetFont("s9 Norm cD5DAE3", "Segoe UI")
@@ -447,13 +480,22 @@ OpenSettings() {
     g.Add("Edit", "x+4 yp-3 w52 Center Number Background1B2029 cE8EAED vEdLead", CFG.lead)
     g.Add("Text", "x+14 yp+3 w30", "gap")
     g.Add("Edit", "x+4 yp-3 w52 Center Number Background1B2029 cE8EAED vEdGap", CFG.gap)
+    g.SetFont("s9 Norm cD5DAE3", "Segoe UI")
+    g.Add("Text", "xm y+10 w150", "catch-up window")
+    g.Add("Edit", "x+4 yp-3 w52 Center Number Background1B2029 cE8EAED vEdCatch", CFG.catchup)
+    g.SetFont("s8 Norm c7A828E", "Segoe UI")
+    g.Add("Text", "xm y+8 w320", "How long to keep retrying after a spell should be up. Raise this if casts get skipped.")
 
     g.SetFont("s9 Norm", "Segoe UI")
     g.Add("Button", "xm y+20 w104 h30 Default vBtSave", "Save")
     g.Add("Button", "x+8 yp w104 h30 vBtReset", "Reset defaults")
     g.Add("Button", "x+8 yp w104 h30 vBtClose", "Cancel")
 
-    g["DdProfile"].OnEvent("Change", SettingsPreset)
+    g["DdSpell1"].OnEvent("Change", SettingsPreset)
+    g["DdSpell2"].OnEvent("Change", SettingsPreset)
+    g["CbOn1"].OnEvent("Click", (c, *) => SettingsWarn(c.Gui))
+    g["CbOn2"].OnEvent("Click", (c, *) => SettingsWarn(c.Gui))
+    SettingsWarn(g)
     g["BtSave"].OnEvent("Click", SettingsSave)
     g["BtReset"].OnEvent("Click", SettingsReset)
     g["BtClose"].OnEvent("Click", SettingsClose)
@@ -469,24 +511,43 @@ Head(g, title) {
     g.Add("Text", "xm y+16 w320", title)
 }
 
-Slot(g, n, title) {
+SlotRow(g, n) {
     def := CFG.slots[n]
+    names := []
+    for sp in SPELLS
+        names.Push(sp.name)
+    idx := names.Length
+    for i, nm in names {
+        if (nm = def.spell)
+            idx := i
+    }
     g.SetFont("s9 Norm cD5DAE3", "Segoe UI")
-    g.Add("Text", "xm y+8 w70", title)
-    g.Add("Edit", "x+8 yp-3 w54 Center Limit6 Background1B2029 cE8EAED vEdKey" . n, def.key)
-    g.Add("Edit", "x+6 yp w82 Center Number Background1B2029 cE8EAED vEdCast" . n, def.cast)
-    g.Add("Edit", "x+6 yp w82 Center Number Background1B2029 cE8EAED vEdCd" . n, def.cd)
+    g.Add("Checkbox", "xm y+9 w64 vCbOn" . n . " Checked" . (def.on ? 1 : 0), "Slot " . n)
+    g.Add("DropDownList", "x+6 yp-4 w132 vDdSpell" . n . " Choose" . idx, names)
+    g.Add("Edit", "x+6 yp w44 Center Limit6 Background1B2029 cE8EAED vEdKey" . n, def.key)
+    g.Add("Edit", "x+6 yp w62 Center Number Background1B2029 cE8EAED vEdCast" . n, def.cast)
+    g.Add("Edit", "x+6 yp w62 Center Number Background1B2029 cE8EAED vEdCd" . n, def.cd)
+}
+
+SettingsWarn(g) {
+    both := g["CbOn1"].Value && g["CbOn2"].Value
+    if (both && g["DdSpell1"].Text = g["DdSpell2"].Text) {
+        g["Warn"].Text := "Both slots hold " . g["DdSpell1"].Text . ". Dungeon Quest shares "
+            . "one cooldown per spell, so slot 2 will never fire. Give it a different spell."
+    } else {
+        g["Warn"].Text := ""
+    }
 }
 
 SettingsPreset(ctrl, *) {
     g := ctrl.Gui
+    n := (ctrl.Name = "DdSpell1") ? 1 : 2
     i := ctrl.Value
-    if (i < 1 || i > PRESETS.Length)
-        return
-    loop 2 {
-        g["EdCast" . A_Index].Value := PRESETS[i].cast
-        g["EdCd" . A_Index].Value := PRESETS[i].cd
+    if (i >= 1 && i < SPELLS.Length) {        ; the last entry is "Custom"
+        g["EdCast" . n].Value := SPELLS[i].cast
+        g["EdCd" . n].Value := SPELLS[i].cd
     }
+    SettingsWarn(g)
 }
 
 SettingsSave(ctrl, *) {
@@ -496,23 +557,20 @@ SettingsSave(ctrl, *) {
         key := Trim(g["EdKey" . n].Value)
         if (key != "")
             CFG.slots[n].key := key
-        CFG.slots[n].cast := Clamp(g["EdCast" . n].Value, 0, 20000, CFG.slots[n].cast)
-        CFG.slots[n].cd   := Clamp(g["EdCd" . n].Value, 100, 60000, CFG.slots[n].cd)
+        CFG.slots[n].spell := g["DdSpell" . n].Text
+        CFG.slots[n].cast  := Clamp(g["EdCast" . n].Value, 0, 20000, CFG.slots[n].cast)
+        CFG.slots[n].cd    := Clamp(g["EdCd" . n].Value, 100, 60000, CFG.slots[n].cd)
+        CFG.slots[n].on    := g["CbOn" . n].Value ? true : false
     }
     CFG.ping := Clamp(g["EdPing"].Value, 0, 1000, CFG.ping)
     CFG.hold := Clamp(g["EdHold"].Value, 10, 300, CFG.hold)
     CFG.lead := Clamp(g["EdLead"].Value, 0, 2000, CFG.lead)
     CFG.gap  := Clamp(g["EdGap"].Value, 20, 500, CFG.gap)
+    CFG.catchup := Clamp(g["EdCatch"].Value, 0, 4000, CFG.catchup)
     CFG.chatGuard  := g["CbChat"].Value ? true : false
     CFG.focusGuard := g["CbFocus"].Value ? true : false
     CFG.clickAfter := g["CbClick"].Value ? true : false
     CFG.showPanel  := g["CbPanel"].Value ? true : false
-
-    sel := g["DdProfile"].Value
-    matches := (sel >= 1 && sel <= PRESETS.Length)
-               && (CFG.slots[1].cast = PRESETS[sel].cast)
-               && (CFG.slots[1].cd = PRESETS[sel].cd)
-    CFG.profile := matches ? sel : PRESETS.Length + 1
 
     was := ENG.on
     ENG.on := false
@@ -536,13 +594,15 @@ SettingsReset(ctrl, *) {
     CFG.hold := 40
     CFG.lead := 300
     CFG.gap := 70
+    CFG.catchup := 1500
     CFG.chatGuard := true
     CFG.focusGuard := true
     CFG.clickAfter := false
     CFG.showPanel := true
-    CFG.slots[1].key := "q"
-    CFG.slots[2].key := "e"
-    ApplyPreset(1)
+    CFG.slots[1].key := "q", CFG.slots[1].spell := "Pulse Waves"
+    CFG.slots[1].cast := 1000, CFG.slots[1].cd := 4000, CFG.slots[1].on := true
+    CFG.slots[2].key := "e", CFG.slots[2].spell := "Arrow Rain"
+    CFG.slots[2].cast := 500, CFG.slots[2].cd := 4000, CFG.slots[2].on := true
     RebuildSlots()
     SaveIni()
     SettingsClose(ctrl)
@@ -576,7 +636,7 @@ LoadIni() {
     CFG.hold    := Clamp(IniRead(INI_PATH, "main", "hold", CFG.hold), 10, 300, CFG.hold)
     CFG.lead    := Clamp(IniRead(INI_PATH, "main", "lead", CFG.lead), 0, 2000, CFG.lead)
     CFG.gap     := Clamp(IniRead(INI_PATH, "main", "gap", CFG.gap), 20, 500, CFG.gap)
-    CFG.profile := Clamp(IniRead(INI_PATH, "main", "profile", CFG.profile), 1, 9, CFG.profile)
+    CFG.catchup := Clamp(IniRead(INI_PATH, "main", "catchup", CFG.catchup), 0, 4000, CFG.catchup)
     CFG.panelX  := Clamp(IniRead(INI_PATH, "main", "panelX", CFG.panelX), -5000, 9999, CFG.panelX)
     CFG.panelY  := Clamp(IniRead(INI_PATH, "main", "panelY", CFG.panelY), -5000, 9999, CFG.panelY)
     CFG.chatGuard  := IniRead(INI_PATH, "main", "chatGuard", "1") = "1"
@@ -590,6 +650,10 @@ LoadIni() {
             def.key := Trim(key)
         def.cast := Clamp(IniRead(INI_PATH, sec, "cast", def.cast), 0, 20000, def.cast)
         def.cd   := Clamp(IniRead(INI_PATH, sec, "cd", def.cd), 100, 60000, def.cd)
+        sp := IniRead(INI_PATH, sec, "spell", def.spell)
+        if (Trim(sp) != "")
+            def.spell := Trim(sp)
+        def.on := IniRead(INI_PATH, sec, "on", "1") = "1"
     }
 }
 
@@ -599,7 +663,7 @@ SaveIni() {
         IniWrite(CFG.hold, INI_PATH, "main", "hold")
         IniWrite(CFG.lead, INI_PATH, "main", "lead")
         IniWrite(CFG.gap, INI_PATH, "main", "gap")
-        IniWrite(CFG.profile, INI_PATH, "main", "profile")
+        IniWrite(CFG.catchup, INI_PATH, "main", "catchup")
         IniWrite(CFG.chatGuard ? 1 : 0, INI_PATH, "main", "chatGuard")
         IniWrite(CFG.focusGuard ? 1 : 0, INI_PATH, "main", "focusGuard")
         IniWrite(CFG.clickAfter ? 1 : 0, INI_PATH, "main", "clickAfter")
@@ -610,6 +674,8 @@ SaveIni() {
             IniWrite(def.key, INI_PATH, "slot" . i, "key")
             IniWrite(def.cast, INI_PATH, "slot" . i, "cast")
             IniWrite(def.cd, INI_PATH, "slot" . i, "cd")
+            IniWrite(def.spell, INI_PATH, "slot" . i, "spell")
+            IniWrite(def.on ? 1 : 0, INI_PATH, "slot" . i, "on")
         }
     }
 }
