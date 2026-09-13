@@ -62,7 +62,7 @@ PROFILES := [
 
 MODES := ["cycle", "spam", "mash"]
 
-S := { on: false, p: 0, mode: START_MODE, castUntil: 0, nextAct: 0, mashIdx: 1, slots: [] }
+ENG := { on: false, p: 0, mode: START_MODE, castUntil: 0, nextAct: 0, mashIdx: 1, slots: [] }
 
 LoadProfile(START_PROFILE)
 Status(StatusText("OFF"))
@@ -76,7 +76,7 @@ F8::NextMode()
 
 Tick() {
     static busy := false
-    if (busy || !S.on)
+    if (busy || !ENG.on)
         return
     if (GAME_WINDOW != "" && !WinActive(GAME_WINDOW))
         return
@@ -90,29 +90,29 @@ Tick() {
 
 Step() {
     now := A_TickCount
-    if (now < S.nextAct)
+    if (now < ENG.nextAct)
         return
 
     ; mash: once every slot has fired once the stagger is set, so stop
     ; thinking about it and just alternate.
-    if (S.mode = "mash" && Primed()) {
-        Cast(S.slots[S.mashIdx].key)
-        S.mashIdx := Mod(S.mashIdx, S.slots.Length) + 1
-        S.nextAct := A_TickCount + MASH_MS
+    if (ENG.mode = "mash" && Primed()) {
+        Cast(ENG.slots[ENG.mashIdx].key)
+        ENG.mashIdx := Mod(ENG.mashIdx, ENG.slots.Length) + 1
+        ENG.nextAct := A_TickCount + MASH_MS
         return
     }
 
     ; never touch a key while a cast animation is still playing - that is
     ; what keeps the two slots from stepping on each other.
-    if (now < S.castUntil) {
-        S.nextAct := S.castUntil
+    if (now < ENG.castUntil) {
+        ENG.nextAct := ENG.castUntil
         return
     }
 
-    lead := (S.mode = "spam") ? LEAD_MS : 0
+    lead := (ENG.mode = "spam") ? LEAD_MS : 0
     pick := 0
     best := 0
-    for i, s in S.slots {
+    for i, s in ENG.slots {
         due := s.readyAt + MARGIN_MS
         if (now >= due - lead && (pick = 0 || due < best)) {
             pick := i
@@ -120,11 +120,11 @@ Step() {
         }
     }
     if (pick = 0) {
-        S.nextAct := now + TICK_MS
+        ENG.nextAct := now + TICK_MS
         return
     }
 
-    s := S.slots[pick]
+    s := ENG.slots[pick]
     Cast(s.key)
     t := A_TickCount
     due := s.readyAt + MARGIN_MS
@@ -133,12 +133,12 @@ Step() {
         ; spell was off cooldown, so this press fired it
         s.readyAt := t + s.cast + s.cd
         s.casts += 1
-        S.castUntil := t + s.cast
-        S.nextAct := t
+        ENG.castUntil := t + s.cast
+        ENG.nextAct := t
     } else {
         ; still on cooldown - keep tapping, but land the next tap exactly on ready
         nxt := t + GAP_MS
-        S.nextAct := (nxt > due) ? due : nxt
+        ENG.nextAct := (nxt > due) ? due : nxt
     }
 }
 
@@ -153,7 +153,7 @@ Cast(key) {
 }
 
 Primed() {
-    for s in S.slots {
+    for s in ENG.slots {
         if (s.casts < 1)
             return false
     }
@@ -161,67 +161,67 @@ Primed() {
 }
 
 LoadProfile(i) {
-    S.p := i
-    S.slots := []
+    ENG.p := i
+    ENG.slots := []
     for def in PROFILES[i].slots
-        S.slots.Push({ key: def.key, cast: def.cast, cd: def.cd, readyAt: 0, casts: 0 })
+        ENG.slots.Push({ key: def.key, cast: def.cast, cd: def.cd, readyAt: 0, casts: 0 })
     ResetCycle()
 }
 
 ResetCycle() {
     now := A_TickCount
-    S.castUntil := now
-    S.nextAct := now
-    S.mashIdx := 1
-    for s in S.slots {
+    ENG.castUntil := now
+    ENG.nextAct := now
+    ENG.mashIdx := 1
+    for s in ENG.slots {
         s.readyAt := now
         s.casts := 0
     }
 }
 
 ReleaseKeys() {
-    for s in S.slots
+    for s in ENG.slots
         Send("{" s.key " up}")
 }
 
 Toggle() {
-    S.on := !S.on
-    if (S.on)
+    ENG.on := !ENG.on
+    if (ENG.on)
         ResetCycle()
     else
         ReleaseKeys()
-    Status(StatusText(S.on ? "ON" : "OFF"))
+    Status(StatusText(ENG.on ? "ON" : "OFF"))
 }
 
 NextProfile() {
-    was := S.on
-    S.on := false
+    was := ENG.on
+    ENG.on := false
     ReleaseKeys()
-    LoadProfile(Mod(S.p, PROFILES.Length) + 1)
-    S.on := was
-    Status(StatusText(S.on ? "ON" : "OFF"))
+    LoadProfile(Mod(ENG.p, PROFILES.Length) + 1)
+    ENG.on := was
+    Status(StatusText(ENG.on ? "ON" : "OFF"))
 }
 
 NextMode() {
     i := 1
     for idx, m in MODES {
-        if (m = S.mode) {
+        if (m = ENG.mode) {
             i := idx
             break
         }
     }
-    S.mode := MODES[Mod(i, MODES.Length) + 1]
+    ENG.mode := MODES[Mod(i, MODES.Length) + 1]
     ResetCycle()
-    Status(StatusText(S.on ? "ON" : "OFF"))
+    Status(StatusText(ENG.on ? "ON" : "OFF"))
 }
 
 StatusText(state) {
     keys := ""
-    for s in S.slots
+    for s in ENG.slots
         keys .= ((keys = "") ? "" : " / ") . StrUpper(s.key)
     t := "Dungeon Quest cycler: " . state . "`n"
-    t .= "Profile: " . PROFILES[S.p].name . "`n"
-    t .= "Mode: " . S.mode . "`n"
+    t .= "Profile: " . PROFILES[ENG.p].name . "`n"
+    t .= "Mode: " . ENG.mode . "`n"
     t .= "Keys: " . keys . "`n"
     t .= "F6 on/off | F7 profile | F8 mode | Shift+Esc quit"
     return t
