@@ -67,6 +67,116 @@ How it works:
 
 ## Roblox / Dungeon Quest
 
+### DQCycler
+
+Auto-cycles your two spell slots for carrying lower dungeons.
+
+The point is the stagger. Run the same carry spell in both slots and the macro
+times the opener off the spell's activation animation — slot 2 goes out the
+instant slot 1 finishes casting — so the two cooldowns stay permanently offset
+and one spell is always going out. Once that offset is set, both keys just get
+spammed; presses that land on cooldown do nothing, so the rotation holds itself
+together without you tracking it.
+
+The spam is deliberate. It costs about 2.5 keypresses per cast instead of 1, and
+buys back the fact that a single dropped input would otherwise cost a whole cast.
+Cast timing is identical either way.
+
+#### Keybinds
+- `F6` — Start/stop
+- `F7` — Next profile (Mage / Warrior)
+- `F4` — Settings window
+- `F10` — Show/hide the panel
+- `Shift+Esc` — Exit
+
+#### Settings (`F4`)
+Everything is editable in the settings window — no need to open the script.
+Changes are saved to `DQCycler.ini` next to the file and reloaded on startup.
+
+| Section | What's in it |
+| --- | --- |
+| Spell | Profile preset, plus the key, activation time and cooldown for each slot |
+| Connection | Your ping |
+| Behaviour | Chat guard, focus guard, click-after-cast, show panel |
+| Advanced | hold / lead / gap keypress timing |
+
+Presets:
+
+| Profile | Spell | Activation | Listed CD | Full cycle |
+| --- | --- | --- | --- | --- |
+| Mage | Pulse Waves | 1.0s | 4s | 5.0s |
+| Warrior | Arrow Rain | 0.5s | 4s | 4.5s |
+
+Both slots default to the same spell, which is the normal carry setup. Give the
+two slots different values and the scheduler handles the uneven cooldowns fine —
+the profile just shows as "Custom setup".
+
+#### Set your ping
+This is the one setting worth tuning. Find it in Roblox under **Esc > Settings >
+Performance Stats** (or `Shift+F3`) while you are in a dungeon.
+
+The macro cannot see your real cooldowns, so it pads every one by this much
+before pressing. Too low and the press lands before the server agrees the spell
+is up, and gets eaten. Too high and you donate uptime. If casts still get
+swallowed, add 30-50 to whatever your ping reads. The pad never drops below 25ms,
+because Roblox only ticks at 60Hz.
+
+#### Chat guard
+Opening Roblox chat pauses the macro, so your spell keys never end up in the chat
+box. It watches `/` and `Enter` to catch chat opening and `Enter` or `Esc` to
+catch it closing, then resumes shortly after. Nothing is swallowed — those keys
+still reach Roblox normally, the macro only listens. A 20s failsafe force-resumes
+if a close is ever missed.
+
+Cooldowns are tracked as absolute timestamps, so pausing never desyncs the
+rotation. If you type long enough for both spells to come up, the scheduler
+re-establishes the stagger by itself on the next cast.
+
+#### Panel
+An always-on-top panel shows run state, the active profile, your ping, and a live
+cooldown bar per slot. Drag it anywhere — the position is remembered. `F10` hides
+it. It never takes focus, so it will not knock you out of Roblox.
+
+The state line is the thing to watch:
+- `STOPPED` — idle, press `F6`.
+- `RUNNING` — actively casting.
+- `TYPING` — chat is open, paused until you are done.
+- `WAITING` — running, but Roblox is not the focused window so nothing is being
+  sent. This is what you will see if you tab out.
+
+#### Notes
+- The panel needs Roblox in **windowed or borderless** mode; exclusive fullscreen
+  will draw over it.
+- Press `F6` with both spells off cooldown. The macro times blind — if you start
+  it mid-cooldown it will believe a phantom cast fired and stay out of sync.
+- If Roblox ignores the keys entirely, change `SendMode("Input")` near the top to
+  `SendMode("Event")` and run AutoHotkey as administrator.
+- Your ping pad and the key hold time mean each cycle runs slightly longer than
+  the spell's true cooldown. That is deliberate slack, not drift — it does not
+  accumulate.
+
+---
+
+## Requirements
+- Spencer Macro Utilities
+- Freeze keybind set to `Middle Mouse Button`
+- `240+ FPS` recommended
+
+##### Default Keybinds
+- `F1` — Activate script
+- `F4` — Exit script
+
+##### FPS Notes
+- Tested at:
+  - `60 FPS`
+  - `240 FPS`
+- Works significantly better at higher FPS.
+- FPS values between 60 and 240 have not been thoroughly tested.
+
+---
+
+## Roblox / Dungeon Quest
+
 ### AbilityCycle
 
 Auto-cycles your two spell slots (`Q` and `E`) for carrying lower dungeons.
@@ -255,7 +365,7 @@ where it opens.
 
 ### General
 - AutoHotkey v1 — `PressureJump`, `Clip`
-- AutoHotkey v2 — `PressureJumpV2`, `AbilityCycle`
+- AutoHotkey v2 — `PressureJumpV2`, `DQCycler`
 
 ### Additional Requirements
 - Spencer Macro Utilities (required for `Clip`)
