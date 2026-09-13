@@ -31,6 +31,7 @@ GAME_WIN := "ahk_exe RobloxPlayerBeta.exe"
 MARGIN_FLOOR := 25     ; Roblox ticks at 60Hz, never pad tighter than this
 TICK_MS      := 10     ; scheduler resolution
 BAR_W        := 148    ; cooldown bar width in px
+PANEL_H      := 214    ; panel height in px
 CHAT_TIMEOUT := 20000  ; force-resume if chat never reports closing
 RESUME_MS    := 300    ; settling time after chat closes
 
@@ -84,7 +85,8 @@ CFG := {
 ENG := { on:false, castUntil:0, nextAct:0, slots:[],
          typing:false, typingSince:0, resumeAt:0,
          panelOn:true, lastState:"", set:"",
-         calT:0, calWas:false, calMsg:"", calSpell:"", picking:false }
+         calT:0, calWas:false, calMsg:"", calSpell:"", picking:false,
+         castCount:0, runSince:0 }
 
 LoadIni()
 RebuildSlots()
@@ -421,6 +423,7 @@ Step() {
     if (t >= slot.due && !slot.beatDone) {
         slot.beatDone := true
         slot.casts += 1
+        ENG.castCount += 1
         ENG.castUntil := t + slot.cast
     }
 
@@ -511,10 +514,13 @@ ReleaseKeys() {
 
 Toggle(*) {
     ENG.on := !ENG.on
-    if (ENG.on)
+    if (ENG.on) {
+        ENG.castCount := 0
+        ENG.runSince := A_TickCount
         ResetCycle()
-    else
+    } else {
         ReleaseKeys()
+    }
 }
 
 ; ─────────────────────────── PANEL ────────────────────────────
@@ -523,35 +529,49 @@ BuildPanel() {
     g := Gui("-Caption +AlwaysOnTop +ToolWindow +E0x08000000", "DQ Cycler")
     g.BackColor := CL.bg
 
-    g.SetFont("s8 Bold c" . CL.dim, "Segoe UI")
-    g.Add("Text", "x16 y12 w110", "DQ CYCLER")
-    g.SetFont("s8 Norm c" . CL.dim)
-    g.Add("Text", "x126 y12 w108 Right vHelp", "settings")
+    ; state-coloured stripe across the top - the panel's mood in 3px
+    g.Add("Text", "x0 y0 w250 h3 Background" . CL.stop . " vStripe", "")
 
-    g.SetFont("s15 Bold c" . CL.stop, "Segoe UI")
-    g.Add("Text", "x16 y28 w218 vState", "STOPPED")
+    g.SetFont("s8 Bold c" . CL.dim, "Segoe UI")
+    g.Add("Text", "x16 y14 w110", "DQ CYCLER")
+    g.SetFont("s8 Norm c" . CL.dim)
+    g.Add("Text", "x126 y14 w108 Right vHelp", "settings")
+
+    g.SetFont("s16 Bold c" . CL.stop, "Segoe UI")
+    g.Add("Text", "x16 y29 w218 vState", "STOPPED")
 
     g.SetFont("s8 Norm c" . CL.mid)
-    g.Add("Text", "x16 y54 w218 vNote", "press F6 to start")
+    g.Add("Text", "x16 y55 w218 h15 vNote", "press F6 to start")
+
+    g.Add("Text", "x16 y76 w218 h1 Background" . CL.sunk, "")
 
     g.SetFont("s9 Norm c" . CL.text)
-    g.Add("Text", "x16 y74 w218 vProfile", "-")
+    g.Add("Text", "x16 y85 w218 vProfile", "-")
 
-    Row(g, 1, 100, "Q", CL.q)
-    Row(g, 2, 122, "E", CL.e)
+    Row(g, 1, 110, CL.q)
+    Row(g, 2, 132, CL.e)
 
     g.SetFont("s8 Norm c" . CL.dim, "Segoe UI")
-    g.Add("Text", "x16 y148 w218 vFoot", "-")
+    g.Add("Text", "x16 y156 w218 vNext", "")
 
-    g.Show("x" . CFG.panelX . " y" . CFG.panelY . " w250 h170 NoActivate")
-    try WinSetRegion("0-0 w250 h170 R14-14", "ahk_id " . g.Hwnd)
+    g.Add("Text", "x16 y176 w218 h1 Background" . CL.sunk, "")
+
+    g.SetFont("s8 Norm c" . CL.mid, "Segoe UI")
+    g.Add("Text", "x16 y184 w130 vStats", "")
+    g.Add("Text", "x146 y184 w88 Right vPing", "")
+    g.SetFont("s8 Norm c" . CL.dim)
+    g.Add("Text", "x16 y197 w130 vCycle", "")
+    g.Add("Text", "x146 y197 w88 Right vFoot", "")
+
+    g.Show("x" . CFG.panelX . " y" . CFG.panelY . " w250 h" . PANEL_H . " NoActivate")
+    try WinSetRegion("0-0 w250 h" . PANEL_H . " R14-14", "ahk_id " . g.Hwnd)
     try WinSetTransparent(247, "ahk_id " . g.Hwnd)
     return g
 }
 
-Row(g, n, y, label, tone) {
-    g.SetFont("s9 Bold c" . CL.bright, "Consolas")
-    g.Add("Text", "x16 y" . y . " w16 vKey" . n, label)
+Row(g, n, y, tone) {
+    g.SetFont("s9 Bold c" . tone, "Consolas")
+    g.Add("Text", "x16 y" . y . " w18 vKey" . n, "-")
     g.Add("Text", "x38 y" . (y + 3) . " w" . BAR_W . " h9 Background" . CL.sunk . " vTrough" . n, "")
     g.Add("Text", "x38 y" . (y + 3) . " w1 h9 Background" . tone . " vBar" . n, "")
     g.SetFont("s8 Norm c" . CL.mid, "Segoe UI")
@@ -589,6 +609,8 @@ RefreshPanel() {
             PANEL["State"].Opt("c" . colour)
             PANEL["State"].Text := state
             PANEL["State"].Redraw()
+            PANEL["Stripe"].Opt("Background" . colour)
+            PANEL["Stripe"].Redraw()
         } catch {
             PANEL["State"].Text := state
         }
@@ -596,8 +618,16 @@ RefreshPanel() {
     PANEL["Note"].Text := note
     PANEL["Profile"].Text := SetupName()
     PANEL["Help"].Text := CFG.keys.settings . "  settings"
-    PANEL["Foot"].Text := "ping " . CFG.ping . "ms      cycle "
-        . Format("{:.2f}", CycleSpan() / 1000) . "s      " . CFG.keys.run . " start/stop"
+    PANEL["Ping"].Text := "ping " . CFG.ping . "ms"
+    PANEL["Cycle"].Text := "cycle " . Format("{:.2f}", CycleSpan() / 1000) . "s"
+    PANEL["Foot"].Text := CFG.keys.run . " start/stop"
+    if (ENG.on) {
+        secs := (A_TickCount - ENG.runSince) // 1000
+        PANEL["Stats"].Text := ENG.castCount . " casts   "
+            . ((secs < 60) ? secs . "s" : (secs // 60) . "m " . Mod(secs, 60) . "s")
+    } else {
+        PANEL["Stats"].Text := (ENG.castCount > 0) ? ENG.castCount . " casts" : ""
+    }
 
     now := A_TickCount
     span := CycleSpan()
@@ -638,6 +668,30 @@ RefreshPanel() {
                 PANEL["Bar" . i].Redraw()
             }
         }
+    }
+
+    if (!ENG.on) {
+        PANEL["Next"].Text := ""
+        return
+    }
+    soon := 0
+    best := 0
+    for i, slot in ENG.slots {
+        if (!slot.on)
+            continue
+        if (soon = 0 || slot.due < best) {
+            soon := i
+            best := slot.due
+        }
+    }
+    if (soon = 0) {
+        PANEL["Next"].Text := ""
+    } else {
+        wait := best - A_TickCount
+        PANEL["Next"].Text := (wait <= 0)
+            ? "next   " . StrUpper(ENG.slots[soon].key) . "   now"
+            : "next   " . StrUpper(ENG.slots[soon].key) . "   in "
+              . Format("{:.1f}", wait / 1000) . "s"
     }
 }
 
@@ -687,16 +741,14 @@ OpenSettings(*) {
     g.Add("Text", "x+6 yp w44 Center", "key")
     g.Add("Text", "x+6 yp w62 Center", "activation")
     g.Add("Text", "x+6 yp w62 Center", "cooldown")
-    g.SetFont("s8 Norm c7A828E", "Segoe UI")
 
     SlotRow(g, 1)
     SlotRow(g, 2)
 
     g.SetFont("s8 Norm c7A828E", "Segoe UI")
-    g.Add("Text", "xm y+10 w380 h44",
-        "These are guesses and the real cooldown is longer - activation, server tick and`n"
-        . "ping all add on. Even 300ms off breaks the rhythm, so measure it instead: the`n"
-        . "button below casts the spell, then you press the measure key when it lights up.")
+    g.Add("Text", "xm y+8 w380 h32",
+        "The listed cooldown is not the real one - activation and ping add on,`n"
+        . "and 300ms out breaks the rhythm. Measure it rather than guess.")
     g.SetFont("s9 Norm", "Segoe UI")
     g.Add("Button", "xm y+10 w186 h28 vBtCal", "Measure cooldown now")
     g.Add("Button", "x+8 yp w130 h28 vBtPick", "Pick spell icon")
@@ -704,9 +756,9 @@ OpenSettings(*) {
     g.Add("Text", "x+10 yp+5 w56", "size")
     g.Add("Edit", "x+4 yp-3 w44 Center Number Background1B2029 cE8EAED vEdIconR", CFG.iconR)
     g.SetFont("s8 Norm c7A828E", "Segoe UI")
-    g.Add("Text", "xm y+8 w380 h30 vIconTxt", "")
+    g.Add("Text", "xm y+8 w380 h16 vIconTxt", "")
     g.SetFont("s8 Norm cFFC542", "Segoe UI")
-    g.Add("Text", "xm y+10 w380 h30 vWarn", "")
+    g.Add("Text", "xm y+5 w380 h16 vWarn", "")
 
     Head(g, "CONNECTION")
     g.SetFont("s9 Norm cD5DAE3", "Segoe UI")
@@ -728,14 +780,14 @@ OpenSettings(*) {
 
     Head(g, "HOTKEYS")
     g.SetFont("s8 Norm c7A828E", "Segoe UI")
-    g.Add("Text", "xm y+6 w380", "Roblox uses F8 for its debug stats and F9 for the console. "
-        . "Right-click the tray icon if a key ever stops responding.")
+    g.Add("Text", "xm y+6 w380 h16",
+        "Roblox keeps F8 and F9. Right-click the tray icon if a key stops working.")
     g.SetFont("s9 Norm cD5DAE3", "Segoe UI")
-    g.Add("Text", "xm y+10 w66", "start/stop")
+    g.Add("Text", "xm y+8 w66", "start/stop")
     g.Add("Edit", "x+4 yp-3 w54 Center Limit12 Background1B2029 cE8EAED vEdKeyRun", CFG.keys.run)
     g.Add("Text", "x+12 yp+3 w54", "measure")
     g.Add("Edit", "x+4 yp-3 w54 Center Limit12 Background1B2029 cE8EAED vEdKeyMeas", CFG.keys.measure)
-    g.Add("Text", "xm y+9 w66", "settings")
+    g.Add("Text", "xm y+7 w66", "settings")
     g.Add("Edit", "x+4 yp-3 w54 Center Limit12 Background1B2029 cE8EAED vEdKeySet", CFG.keys.settings)
     g.Add("Text", "x+12 yp+3 w54", "panel")
     g.Add("Edit", "x+4 yp-3 w54 Center Limit12 Background1B2029 cE8EAED vEdKeyPanel", CFG.keys.panel)
@@ -754,7 +806,7 @@ OpenSettings(*) {
     g.Add("Text", "xm y+10 w150", "catch-up window")
     g.Add("Edit", "x+4 yp-3 w52 Center Number Background1B2029 cE8EAED vEdCatch", CFG.catchup)
     g.SetFont("s8 Norm c7A828E", "Segoe UI")
-    g.Add("Text", "xm y+8 w320", "How long to keep retrying after a spell should be up. Raise this if casts get skipped.")
+    g.Add("Text", "xm y+7 w380 h16", "Retry window after a spell should be up. Raise if casts get skipped.")
 
     g.SetFont("s9 Norm", "Segoe UI")
     g.Add("Button", "xm y+20 w104 h30 Default vBtSave", "Save")
@@ -769,9 +821,8 @@ OpenSettings(*) {
     g["BtCal"].OnEvent("Click", SettingsMeasure)
     g["BtPick"].OnEvent("Click", SettingsPick)
     g["IconTxt"].Text := (CFG.iconX >= 0)
-        ? "Icon spot: " . CFG.iconX . ", " . CFG.iconY . " - measuring is automatic. "
-          . "Size is half the icon's width in pixels - 32 suits a 1920x1080 hotbar."
-        : "No icon spot set, so measuring needs a second keypress. Pick the icon to automate it."
+        ? "Icon spot " . CFG.iconX . "," . CFG.iconY . " - measuring is automatic."
+        : "No icon spot - measuring takes a second keypress. Pick one."
     g["BtSave"].OnEvent("Click", SettingsSave)
     g["BtReset"].OnEvent("Click", SettingsReset)
     g["BtClose"].OnEvent("Click", SettingsClose)
@@ -784,7 +835,7 @@ OpenSettings(*) {
 
 Head(g, title) {
     g.SetFont("s8 Bold c5A6270", "Segoe UI")
-    g.Add("Text", "xm y+16 w320", title)
+    g.Add("Text", "xm y+13 w320", title)
 }
 
 SlotRow(g, n) {
@@ -823,8 +874,8 @@ SettingsWarn(g) {
     ca := SpellClass(a)
     cb := SpellClass(b)
     if (ca != "any" && cb != "any" && ca != cb) {
-        g["Warn"].Text := a . " is a " . ca . " spell and " . b . " is a " . cb . " spell. "
-            . "Your kit is one class, so you cannot equip both."
+        g["Warn"].Text := a . " is " . ca . ", " . b . " is " . cb
+            . " - a kit is one class, so these cannot both be equipped."
     } else {
         g["Warn"].Text := ""
     }

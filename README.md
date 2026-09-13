@@ -280,8 +280,9 @@ rotation. If you type long enough for both spells to come up, the scheduler
 re-establishes the stagger by itself on the next cast.
 
 #### Panel
-An always-on-top panel shows run state, the active profile, your ping, and a live
-cooldown bar per slot. Drag it anywhere — the position is remembered. `F10` hides
+An always-on-top panel with a state-coloured stripe, a live cooldown bar per slot,
+which slot fires next and how long until it does, and a running cast count and
+session timer. Drag it anywhere — the position is remembered. `F10` hides
 it. It never takes focus, so it will not knock you out of Roblox.
 
 The state line is the thing to watch:
