@@ -133,11 +133,13 @@ So measure it instead of guessing. Best done once, automatically:
 
 1. Open settings and click **Pick spell icon**, then click the **middle** of your
    spell's icon on the Roblox hotbar.
-2. Set **size** next to that button to roughly half your icon's width in pixels
-   (18 suits a ~36px icon). The cooldown is a wipe rather than a uniform dim, so the
-   macro has to watch the whole icon — too small a size and it reads the middle only,
-   calls the spell ready halfway through, and reports a cooldown that is far too
-   short.
+2. Set **size** next to that button to roughly half your icon's width in pixels.
+   At 1920x1080 the Dungeon Quest hotbar icons are about 76px, so **32** is right.
+
+   Click the **centre** as accurately as you can — that matters much more than the
+   size does. Testing against a 76px icon, sizes from 18 to 60 all landed within 50ms
+   of each other, but a centre 29px off read a full second short. Don't oversize
+   either: samples that spill past the icon land on the moving game world behind it.
 3. Press **F2**. The macro casts the spell, watches the icon wipe, and times how long
    until every part of it is back. Nothing else to do.
 

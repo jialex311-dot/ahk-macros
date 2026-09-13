@@ -78,7 +78,7 @@ CFG := {
     ; automatic - the macro watches the icon dim and brighten itself.
     iconX: -1,
     iconY: -1,
-    iconR: 18        ; half the icon's size, in pixels
+    iconR: 32        ; half the icon's width, in pixels
 }
 
 ENG := { on:false, castUntil:0, nextAct:0, slots:[],
@@ -163,17 +163,23 @@ TrayExit(*)     => ExitApp()
 ; clears about halfway through. Sample a grid across the WHOLE icon and
 ; keep each point's own resting brightness: the spell is only back when
 ; every point has returned, whichever way the wipe travels.
+; Diamond, not a square grid: a square's corners sit 1.4x further from the
+; centre than its edges, so they would fall outside a rounded icon and read
+; the game world behind it. Every point here stays within `size` of centre,
+; while still spanning the icon's full height for a vertical wipe.
+ICON_PTS := [[0,0], [-0.5,0], [0.5,0], [-1,0], [1,0],
+             [0,-0.5], [0,0.5], [0,-1], [0,1],
+             [-0.5,-0.5], [0.5,-0.5], [-0.5,0.5], [0.5,0.5]]
+
 IconSamples() {
     pts := []
     r := CFG.iconR
-    for fy in [-1.0, -0.5, 0.0, 0.5, 1.0] {
-        for fx in [-1.0, -0.5, 0.0, 0.5, 1.0] {
-            try {
-                c := PixelGetColor(CFG.iconX + Round(fx * r), CFG.iconY + Round(fy * r), "RGB")
-                pts.Push((((c >> 16) & 0xFF) * 299 + ((c >> 8) & 0xFF) * 587 + (c & 0xFF) * 114) / 1000)
-            } catch {
-                pts.Push(-1)
-            }
+    for pt in ICON_PTS {
+        try {
+            c := PixelGetColor(CFG.iconX + Round(pt[1] * r), CFG.iconY + Round(pt[2] * r), "RGB")
+            pts.Push((((c >> 16) & 0xFF) * 299 + ((c >> 8) & 0xFF) * 587 + (c & 0xFF) * 114) / 1000)
+        } catch {
+            pts.Push(-1)
         }
     }
     return pts
@@ -764,7 +770,7 @@ OpenSettings(*) {
     g["BtPick"].OnEvent("Click", SettingsPick)
     g["IconTxt"].Text := (CFG.iconX >= 0)
         ? "Icon spot: " . CFG.iconX . ", " . CFG.iconY . " - measuring is automatic. "
-          . "Size is half the icon's width; raise it if the measurement comes out short."
+          . "Size is half the icon's width in pixels - 32 suits a 1920x1080 hotbar."
         : "No icon spot set, so measuring needs a second keypress. Pick the icon to automate it."
     g["BtSave"].OnEvent("Click", SettingsSave)
     g["BtReset"].OnEvent("Click", SettingsReset)
