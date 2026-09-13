@@ -129,12 +129,15 @@ activation, server tick and ping all add to the real figure. Being even 300ms sh
 is enough to break the rhythm: the press lands before the server thinks the spell is
 up, gets eaten, and the cast comes out late a cycle or two later.
 
-So measure it instead of guessing:
+So measure it instead of guessing. Best done once, automatically:
 
-1. Stand in a dungeon with the macro stopped.
-2. Press **F2** — the macro casts the spell itself and starts the clock. It does the
-   casting so the clock starts on the exact keypress rather than on your reaction.
-3. Watch the spell icon. Press **F2** again the moment it lights up.
+1. Open settings and click **Pick spell icon**, then click your spell's icon on the
+   Roblox hotbar. This is the icon that greys out while the spell is on cooldown.
+2. Press **F2**. The macro casts the spell, watches that icon dim, and times how long
+   until it brightens again. Nothing else to do.
+
+Without an icon spot it falls back to two keypresses: **F2** casts and starts the
+clock, then **F2** again when you see the icon light up.
 
 The panel counts up while timing and shows the result. The figure is written to every
 slot holding the spell that was timed — a slot with a different spell is left alone —

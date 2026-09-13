@@ -73,13 +73,17 @@ CFG := {
     ; Roblox claims a lot of function keys (F8 toggles its debug stats, F9 the
     ; dev console, F11 fullscreen), so these are editable - and the tray icon
     ; carries the same actions if a key ever gets swallowed.
-    keys: { run:"F6", measure:"F2", settings:"F4", panel:"F10" }
+    keys: { run:"F6", measure:"F2", settings:"F4", panel:"F10" },
+    ; Screen spot of your spell icon. Set it once and measuring becomes
+    ; automatic - the macro watches the icon dim and brighten itself.
+    iconX: -1,
+    iconY: -1
 }
 
 ENG := { on:false, castUntil:0, nextAct:0, slots:[],
          typing:false, typingSince:0, resumeAt:0,
          panelOn:true, lastState:"", set:"",
-         calT:0, calWas:false, calMsg:"", calSpell:"" }
+         calT:0, calWas:false, calMsg:"", calSpell:"", picking:false }
 
 LoadIni()
 RebuildSlots()
@@ -154,7 +158,117 @@ TrayExit(*)     => ExitApp()
 ; which is what the schedule is measured from. The second F8 is when the
 ; icon lights up again. A late second press only makes the figure slightly
 ; generous, which is the safe direction to be wrong in.
+; Average brightness of a 3x3 patch at the icon spot. -1 if unreadable.
+IconLuma() {
+    if (CFG.iconX < 0 || CFG.iconY < 0)
+        return -1
+    total := 0
+    n := 0
+    for dx in [-3, 0, 3] {
+        for dy in [-3, 0, 3] {
+            try {
+                c := PixelGetColor(CFG.iconX + dx, CFG.iconY + dy, "RGB")
+                total += (((c >> 16) & 0xFF) * 299 + ((c >> 8) & 0xFF) * 587 + (c & 0xFF) * 114) / 1000
+                n += 1
+            }
+        }
+    }
+    return (n = 0) ? -1 : total / n
+}
+
+PickIcon(*) {
+    ENG.picking := true
+    ENG.calMsg := ""
+    try Hotkey("~$LButton", GrabIcon, "On")
+}
+
+GrabIcon(*) {
+    if (!ENG.picking)
+        return
+    ENG.picking := false
+    try Hotkey("~$LButton", "Off")
+    MouseGetPos(&mx, &my)
+    CFG.iconX := mx
+    CFG.iconY := my
+    SaveIni()
+    ENG.calMsg := "icon spot set (" . mx . ", " . my . ")"
+}
+
+ApplyMeasure(span) {
+    if (span < 500 || span > 60000) {
+        ENG.calMsg := "too " . ((span < 500) ? "quick" : "long") . " - try again"
+        return
+    }
+    hit := 0
+    for def in CFG.slots {
+        if (ENG.calSpell != "" && def.spell != ENG.calSpell)
+            continue
+        cd := span - def.cast - Margin()
+        def.cd := (cd < 100) ? 100 : cd
+        hit += 1
+    }
+    RebuildSlots()
+    SaveIni()
+    ENG.calMsg := "measured " . Format("{:.2f}", span / 1000) . "s  -  set on "
+        . hit . ((hit = 1) ? " slot" : " slots")
+}
+
+; Fully automatic: cast, watch the icon dim, then time how long until it
+; comes back. Only possible once the icon spot has been picked.
+AutoMeasure() {
+    ENG.calWas := ENG.on
+    ENG.on := false
+    ReleaseKeys()
+    ENG.calMsg := ""
+    ENG.calSpell := ENG.slots[1].spell
+
+    base := IconLuma()
+    if (base < 0) {
+        ENG.calMsg := "cannot read that spot - pick it again"
+        ENG.on := ENG.calWas
+        return
+    }
+
+    ENG.calT := A_TickCount
+    Cast(ENG.slots[1].key)
+
+    dimmed := false
+    loop 50 {                                  ; up to ~2.5s to go dark
+        Sleep(50)
+        if (IconLuma() < base * 0.82) {
+            dimmed := true
+            break
+        }
+    }
+    if (!dimmed) {
+        ENG.calT := 0
+        ENG.calMsg := "icon never dimmed - is the spot right?"
+        ENG.on := ENG.calWas
+        return
+    }
+
+    loop 700 {                                 ; up to ~35s to come back
+        Sleep(50)
+        if (IconLuma() >= base * 0.94) {
+            span := A_TickCount - ENG.calT
+            ENG.calT := 0
+            ApplyMeasure(span)
+            ENG.on := ENG.calWas
+            if (ENG.on)
+                ResetCycle()
+            return
+        }
+    }
+    ENG.calT := 0
+    ENG.calMsg := "timed out watching the icon"
+    ENG.on := ENG.calWas
+}
+
 Calibrate(*) {
+    if (!ENG.calT && CFG.iconX >= 0 && CFG.iconY >= 0) {
+        AutoMeasure()
+        return
+    }
     if (!ENG.calT) {
         ENG.calWas := ENG.on
         ENG.on := false
@@ -172,23 +286,7 @@ Calibrate(*) {
     }
     span := A_TickCount - ENG.calT
     ENG.calT := 0
-    if (span >= 500 && span <= 60000) {
-        hit := 0
-        for def in CFG.slots {
-            ; only rewrite slots holding the spell we actually timed
-            if (ENG.calSpell != "" && def.spell != ENG.calSpell)
-                continue
-            cd := span - def.cast - Margin()
-            def.cd := (cd < 100) ? 100 : cd
-            hit += 1
-        }
-        RebuildSlots()
-        SaveIni()
-        ENG.calMsg := "measured " . Format("{:.2f}", span / 1000) . "s  -  set on "
-            . hit . ((hit = 1) ? " slot" : " slots")
-    } else {
-        ENG.calMsg := "too " . ((span < 500) ? "quick" : "long") . " - try again"
-    }
+    ApplyMeasure(span)
     ENG.on := ENG.calWas
     if (ENG.on)
         ResetCycle()
@@ -421,10 +519,14 @@ RefreshPanel() {
     if (!IsObject(PANEL) || !ENG.panelOn)
         return
 
-    if (ENG.calT) {
+    if (ENG.picking) {
+        state := "PICK", colour := CL.chat
+        note := "click your spell icon in Roblox"
+    } else if (ENG.calT) {
         state := "TIMING", colour := CL.warn
         note := Format("{:.1f}", (A_TickCount - ENG.calT) / 1000)
-            . "s - press " . CFG.keys.measure . " when the icon lights up"
+            . "s - " . ((CFG.iconX >= 0) ? "watching the icon"
+                : "press " . CFG.keys.measure . " when the icon lights up")
     } else if (!ENG.on) {
         state := "STOPPED", colour := CL.stop
         note := (ENG.calMsg != "") ? ENG.calMsg : "press F6 to start"
@@ -554,6 +656,9 @@ OpenSettings(*) {
         . "button below casts the spell, then you press the measure key when it lights up.")
     g.SetFont("s9 Norm", "Segoe UI")
     g.Add("Button", "xm y+10 w186 h28 vBtCal", "Measure cooldown now")
+    g.Add("Button", "x+8 yp w150 h28 vBtPick", "Pick spell icon")
+    g.SetFont("s8 Norm c7A828E", "Segoe UI")
+    g.Add("Text", "xm y+8 w380 h30 vIconTxt", "")
     g.SetFont("s8 Norm cFFC542", "Segoe UI")
     g.Add("Text", "xm y+10 w380 h30 vWarn", "")
 
@@ -616,6 +721,10 @@ OpenSettings(*) {
     g["CbOn2"].OnEvent("Click", (c, *) => SettingsWarn(c.Gui))
     SettingsWarn(g)
     g["BtCal"].OnEvent("Click", SettingsMeasure)
+    g["BtPick"].OnEvent("Click", SettingsPick)
+    g["IconTxt"].Text := (CFG.iconX >= 0)
+        ? "Icon spot: " . CFG.iconX . ", " . CFG.iconY . " - measuring is automatic."
+        : "No icon spot set, so measuring needs a second keypress. Pick the icon to automate it."
     g["BtSave"].OnEvent("Click", SettingsSave)
     g["BtReset"].OnEvent("Click", SettingsReset)
     g["BtClose"].OnEvent("Click", SettingsClose)
@@ -752,6 +861,11 @@ SettingsReset(ctrl, *) {
     OpenSettings()
 }
 
+SettingsPick(ctrl, *) {
+    SettingsClose(ctrl)
+    PickIcon()
+}
+
 SettingsMeasure(ctrl, *) {
     SettingsClose(ctrl)
     Calibrate()
@@ -806,6 +920,8 @@ LoadIni() {
     CFG.keys.measure  := IniRead(INI_PATH, "keys", "measure", CFG.keys.measure)
     CFG.keys.settings := IniRead(INI_PATH, "keys", "settings", CFG.keys.settings)
     CFG.keys.panel    := IniRead(INI_PATH, "keys", "panel", CFG.keys.panel)
+    CFG.iconX := Clamp(IniRead(INI_PATH, "main", "iconX", CFG.iconX), -1, 20000, CFG.iconX)
+    CFG.iconY := Clamp(IniRead(INI_PATH, "main", "iconY", CFG.iconY), -1, 20000, CFG.iconY)
     for i, def in CFG.slots {
         sec := "slot" . i
         key := IniRead(INI_PATH, sec, "key", def.key)
@@ -837,6 +953,8 @@ SaveIni() {
         IniWrite(CFG.keys.measure, INI_PATH, "keys", "measure")
         IniWrite(CFG.keys.settings, INI_PATH, "keys", "settings")
         IniWrite(CFG.keys.panel, INI_PATH, "keys", "panel")
+        IniWrite(CFG.iconX, INI_PATH, "main", "iconX")
+        IniWrite(CFG.iconY, INI_PATH, "main", "iconY")
         for i, def in CFG.slots {
             IniWrite(def.key, INI_PATH, "slot" . i, "key")
             IniWrite(def.cast, INI_PATH, "slot" . i, "cast")
