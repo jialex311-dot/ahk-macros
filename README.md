@@ -97,10 +97,18 @@ being lost for a whole cycle.
 
 #### Keybinds
 - `F6` — Start/stop
+- `F2` — Measure your real cooldown
 - `F4` — Settings
-- `F8` — Measure your real cooldown
 - `F10` — Show/hide the panel
 - `Shift+Esc` — Exit
+
+All four are editable under **HOTKEYS** in settings. Roblox claims several function
+keys for itself — `F8` is its debug stats overlay and `F9` its console — so if a key
+stops responding, change it there.
+
+**Right-clicking the tray icon** (the green H by the clock) gives you start/stop,
+measure, settings, panel and exit. That always works, even if every hotkey is being
+swallowed by something else.
 
 #### Settings (`F4`)
 Saved to `DQCycler.ini` next to the script and reloaded on startup.
@@ -124,9 +132,9 @@ up, gets eaten, and the cast comes out late a cycle or two later.
 So measure it instead of guessing:
 
 1. Stand in a dungeon with the macro stopped.
-2. Press **F8** — the macro casts the spell itself and starts the clock. It does the
+2. Press **F2** — the macro casts the spell itself and starts the clock. It does the
    casting so the clock starts on the exact keypress rather than on your reaction.
-3. Watch the spell icon. Press **F8** again the moment it lights up.
+3. Watch the spell icon. Press **F2** again the moment it lights up.
 
 The panel counts up while timing and shows the result. The figure is written to every
 slot holding the spell that was timed — a slot with a different spell is left alone —

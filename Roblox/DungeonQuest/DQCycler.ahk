@@ -69,7 +69,11 @@ CFG := {
     catchup: 1500,
     panelX: 20,
     panelY: 20,
-    showPanel: true
+    showPanel: true,
+    ; Roblox claims a lot of function keys (F8 toggles its debug stats, F9 the
+    ; dev console, F11 fullscreen), so these are editable - and the tray icon
+    ; carries the same actions if a key ever gets swallowed.
+    keys: { run:"F6", measure:"F2", settings:"F4", panel:"F10" }
 }
 
 ENG := { on:false, castUntil:0, nextAct:0, slots:[],
@@ -85,13 +89,12 @@ OnExit(Cleanup)
 OnMessage(0x0201, DragPanel)
 SetTimer(Tick, TICK_MS)
 SetTimer(RefreshPanel, 80)
+BindHotkeys()
+BuildTray()
 RefreshPanel()
 
-F6::Toggle()
-F4::OpenSettings()
-F8::Calibrate()
-F10::TogglePanel()
 +Escape::ExitApp()
+
 
 #HotIf CFG.chatGuard && (!CFG.focusGuard || WinActive(GAME_WIN))
 ~$/::SetTyping(true)
@@ -99,6 +102,48 @@ F10::TogglePanel()
 ~$NumpadEnter::SetTyping(!ENG.typing)
 ~$Escape::SetTyping(false)
 #HotIf
+
+; ─────────────────────────── HOTKEYS ──────────────────────────
+
+; "$" forces the keyboard hook, which intercepts the key reliably inside a
+; game instead of letting it fall through to Roblox.
+BindHotkeys() {
+    static bound := []
+    for name in bound {
+        try Hotkey(name, "Off")
+    }
+    bound := []
+    pairs := [[CFG.keys.run, Toggle], [CFG.keys.measure, Calibrate],
+              [CFG.keys.settings, OpenSettings], [CFG.keys.panel, TogglePanel]]
+    for pair in pairs {
+        key := Trim(pair[1])
+        if (key = "")
+            continue
+        try {
+            Hotkey("$" . key, pair[2], "On")
+            bound.Push("$" . key)
+        }
+    }
+}
+
+BuildTray() {
+    t := A_TrayMenu
+    t.Delete()
+    t.Add("Start / stop", TrayRun)
+    t.Add("Measure cooldown", TrayMeasure)
+    t.Add("Settings", TraySettings)
+    t.Add("Show / hide panel", TrayPanel)
+    t.Add()
+    t.Add("Exit", TrayExit)
+    t.Default := "Settings"
+    A_IconTip := "DQ Cycler"
+}
+
+TrayRun(*)      => Toggle()
+TrayMeasure(*)  => Calibrate()
+TraySettings(*) => OpenSettings()
+TrayPanel(*)    => TogglePanel()
+TrayExit(*)     => ExitApp()
 
 ; ─────────────────────────── ENGINE ───────────────────────────
 
@@ -109,7 +154,7 @@ F10::TogglePanel()
 ; which is what the schedule is measured from. The second F8 is when the
 ; icon lights up again. A late second press only makes the figure slightly
 ; generous, which is the safe direction to be wrong in.
-Calibrate() {
+Calibrate(*) {
     if (!ENG.calT) {
         ENG.calWas := ENG.on
         ENG.on := false
@@ -323,7 +368,7 @@ ReleaseKeys() {
         Send("{" slot.key " up}")
 }
 
-Toggle() {
+Toggle(*) {
     ENG.on := !ENG.on
     if (ENG.on)
         ResetCycle()
@@ -340,7 +385,7 @@ BuildPanel() {
     g.SetFont("s8 Bold c" . CL.dim, "Segoe UI")
     g.Add("Text", "x16 y12 w110", "DQ CYCLER")
     g.SetFont("s8 Norm c" . CL.dim)
-    g.Add("Text", "x126 y12 w108 Right", "F4  settings")
+    g.Add("Text", "x126 y12 w108 Right vHelp", "settings")
 
     g.SetFont("s15 Bold c" . CL.stop, "Segoe UI")
     g.Add("Text", "x16 y28 w218 vState", "STOPPED")
@@ -379,7 +424,7 @@ RefreshPanel() {
     if (ENG.calT) {
         state := "TIMING", colour := CL.warn
         note := Format("{:.1f}", (A_TickCount - ENG.calT) / 1000)
-            . "s - press F8 when the icon lights up"
+            . "s - press " . CFG.keys.measure . " when the icon lights up"
     } else if (!ENG.on) {
         state := "STOPPED", colour := CL.stop
         note := (ENG.calMsg != "") ? ENG.calMsg : "press F6 to start"
@@ -405,8 +450,9 @@ RefreshPanel() {
     }
     PANEL["Note"].Text := note
     PANEL["Profile"].Text := SetupName()
+    PANEL["Help"].Text := CFG.keys.settings . "  settings"
     PANEL["Foot"].Text := "ping " . CFG.ping . "ms      cycle "
-        . Format("{:.2f}", CycleSpan() / 1000) . "s      F6 start/stop"
+        . Format("{:.2f}", CycleSpan() / 1000) . "s      " . CFG.keys.run . " start/stop"
 
     now := A_TickCount
     span := CycleSpan()
@@ -450,7 +496,7 @@ RefreshPanel() {
     }
 }
 
-TogglePanel() {
+TogglePanel(*) {
     if (!IsObject(PANEL))
         return
     ENG.panelOn := !ENG.panelOn
@@ -477,7 +523,7 @@ DragPanel(wp, lp, msg, hwnd) {
 
 ; ─────────────────────────── SETTINGS UI ──────────────────────
 
-OpenSettings() {
+OpenSettings(*) {
     if (IsObject(ENG.set)) {
         try {
             ENG.set.Show()
@@ -505,9 +551,9 @@ OpenSettings() {
     g.Add("Text", "xm y+10 w380 h44",
         "These are guesses and the real cooldown is longer - activation, server tick and`n"
         . "ping all add on. Even 300ms off breaks the rhythm, so measure it instead: the`n"
-        . "button below casts the spell, then you press F8 when the icon lights up again.")
+        . "button below casts the spell, then you press the measure key when it lights up.")
     g.SetFont("s9 Norm", "Segoe UI")
-    g.Add("Button", "xm y+10 w186 h28 vBtCal", "Measure cooldown now  (F8)")
+    g.Add("Button", "xm y+10 w186 h28 vBtCal", "Measure cooldown now")
     g.SetFont("s8 Norm cFFC542", "Segoe UI")
     g.Add("Text", "xm y+10 w380 h30 vWarn", "")
 
@@ -528,6 +574,20 @@ OpenSettings() {
           "Left-click after each cast (placement spells)")
     g.Add("Checkbox", "xm y+6 w320 vCbPanel Checked" . (CFG.showPanel ? 1 : 0),
           "Show the on-screen panel")
+
+    Head(g, "HOTKEYS")
+    g.SetFont("s8 Norm c7A828E", "Segoe UI")
+    g.Add("Text", "xm y+6 w380", "Roblox uses F8 for its debug stats and F9 for the console. "
+        . "Right-click the tray icon if a key ever stops responding.")
+    g.SetFont("s9 Norm cD5DAE3", "Segoe UI")
+    g.Add("Text", "xm y+10 w66", "start/stop")
+    g.Add("Edit", "x+4 yp-3 w54 Center Limit12 Background1B2029 cE8EAED vEdKeyRun", CFG.keys.run)
+    g.Add("Text", "x+12 yp+3 w54", "measure")
+    g.Add("Edit", "x+4 yp-3 w54 Center Limit12 Background1B2029 cE8EAED vEdKeyMeas", CFG.keys.measure)
+    g.Add("Text", "xm y+9 w66", "settings")
+    g.Add("Edit", "x+4 yp-3 w54 Center Limit12 Background1B2029 cE8EAED vEdKeySet", CFG.keys.settings)
+    g.Add("Text", "x+12 yp+3 w54", "panel")
+    g.Add("Edit", "x+4 yp-3 w54 Center Limit12 Background1B2029 cE8EAED vEdKeyPanel", CFG.keys.panel)
 
     Head(g, "ADVANCED")
     g.SetFont("s8 Norm c7A828E", "Segoe UI")
@@ -646,6 +706,11 @@ SettingsSave(ctrl, *) {
     CFG.focusGuard := g["CbFocus"].Value ? true : false
     CFG.clickAfter := g["CbClick"].Value ? true : false
     CFG.showPanel  := g["CbPanel"].Value ? true : false
+    CFG.keys.run      := KeyOr(g["EdKeyRun"].Value, CFG.keys.run)
+    CFG.keys.measure  := KeyOr(g["EdKeyMeas"].Value, CFG.keys.measure)
+    CFG.keys.settings := KeyOr(g["EdKeySet"].Value, CFG.keys.settings)
+    CFG.keys.panel    := KeyOr(g["EdKeyPanel"].Value, CFG.keys.panel)
+    BindHotkeys()
 
     was := ENG.on
     ENG.on := false
@@ -678,6 +743,9 @@ SettingsReset(ctrl, *) {
     CFG.slots[1].cast := 1000, CFG.slots[1].cd := 4000, CFG.slots[1].on := true
     CFG.slots[2].key := "e", CFG.slots[2].spell := "Pulse Waves"
     CFG.slots[2].cast := 1000, CFG.slots[2].cd := 4000, CFG.slots[2].on := true
+    CFG.keys.run := "F6", CFG.keys.measure := "F2"
+    CFG.keys.settings := "F4", CFG.keys.panel := "F10"
+    BindHotkeys()
     RebuildSlots()
     SaveIni()
     SettingsClose(ctrl)
@@ -694,6 +762,17 @@ SettingsClose(ctrl, *) {
         try ENG.set.Destroy()
     }
     ENG.set := ""
+}
+
+KeyOr(val, fallback) {
+    v := Trim(val)
+    if (v = "")
+        return fallback
+    try {
+        Hotkey("$" . v, (*) => 0, "Off")     ; reject anything AHK cannot bind
+        return v
+    }
+    return fallback
 }
 
 Clamp(val, lo, hi, fallback) {
@@ -723,6 +802,10 @@ LoadIni() {
     CFG.focusGuard := IniRead(INI_PATH, "main", "focusGuard", "1") = "1"
     CFG.clickAfter := IniRead(INI_PATH, "main", "clickAfter", "0") = "1"
     CFG.showPanel  := IniRead(INI_PATH, "main", "showPanel", "1") = "1"
+    CFG.keys.run      := IniRead(INI_PATH, "keys", "run", CFG.keys.run)
+    CFG.keys.measure  := IniRead(INI_PATH, "keys", "measure", CFG.keys.measure)
+    CFG.keys.settings := IniRead(INI_PATH, "keys", "settings", CFG.keys.settings)
+    CFG.keys.panel    := IniRead(INI_PATH, "keys", "panel", CFG.keys.panel)
     for i, def in CFG.slots {
         sec := "slot" . i
         key := IniRead(INI_PATH, sec, "key", def.key)
@@ -750,6 +833,10 @@ SaveIni() {
         IniWrite(CFG.showPanel ? 1 : 0, INI_PATH, "main", "showPanel")
         IniWrite(CFG.panelX, INI_PATH, "main", "panelX")
         IniWrite(CFG.panelY, INI_PATH, "main", "panelY")
+        IniWrite(CFG.keys.run, INI_PATH, "keys", "run")
+        IniWrite(CFG.keys.measure, INI_PATH, "keys", "measure")
+        IniWrite(CFG.keys.settings, INI_PATH, "keys", "settings")
+        IniWrite(CFG.keys.panel, INI_PATH, "keys", "panel")
         for i, def in CFG.slots {
             IniWrite(def.key, INI_PATH, "slot" . i, "key")
             IniWrite(def.cast, INI_PATH, "slot" . i, "cast")
