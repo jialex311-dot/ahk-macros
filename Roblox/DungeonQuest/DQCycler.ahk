@@ -77,7 +77,8 @@ CFG := {
     ; Screen spot of your spell icon. Set it once and measuring becomes
     ; automatic - the macro watches the icon dim and brighten itself.
     iconX: -1,
-    iconY: -1
+    iconY: -1,
+    iconR: 18        ; half the icon's size, in pixels
 }
 
 ENG := { on:false, castUntil:0, nextAct:0, slots:[],
@@ -158,22 +159,50 @@ TrayExit(*)     => ExitApp()
 ; which is what the schedule is measured from. The second F8 is when the
 ; icon lights up again. A late second press only makes the figure slightly
 ; generous, which is the safe direction to be wrong in.
-; Average brightness of a 3x3 patch at the icon spot. -1 if unreadable.
-IconLuma() {
-    if (CFG.iconX < 0 || CFG.iconY < 0)
-        return -1
-    total := 0
-    n := 0
-    for dx in [-3, 0, 3] {
-        for dy in [-3, 0, 3] {
+; The cooldown is a wipe, not a uniform dim, so the centre of the icon
+; clears about halfway through. Sample a grid across the WHOLE icon and
+; keep each point's own resting brightness: the spell is only back when
+; every point has returned, whichever way the wipe travels.
+IconSamples() {
+    pts := []
+    r := CFG.iconR
+    for fy in [-1.0, -0.5, 0.0, 0.5, 1.0] {
+        for fx in [-1.0, -0.5, 0.0, 0.5, 1.0] {
             try {
-                c := PixelGetColor(CFG.iconX + dx, CFG.iconY + dy, "RGB")
-                total += (((c >> 16) & 0xFF) * 299 + ((c >> 8) & 0xFF) * 587 + (c & 0xFF) * 114) / 1000
-                n += 1
+                c := PixelGetColor(CFG.iconX + Round(fx * r), CFG.iconY + Round(fy * r), "RGB")
+                pts.Push((((c >> 16) & 0xFF) * 299 + ((c >> 8) & 0xFF) * 587 + (c & 0xFF) * 114) / 1000)
+            } catch {
+                pts.Push(-1)
             }
         }
     }
-    return (n = 0) ? -1 : total / n
+    return pts
+}
+
+; darker than resting by both a ratio and an absolute amount, so nearly
+; black points do not flap
+IconDarkAt(base, cur, i, ratio) {
+    b := base[i]
+    if (b < 0 || cur[i] < 0)
+        return false
+    return (b - cur[i] > 12) && (cur[i] < b * ratio)
+}
+
+IconDimmed(base, cur) {
+    n := 0
+    loop base.Length {
+        if (IconDarkAt(base, cur, A_Index, 0.80))
+            n += 1
+    }
+    return n >= 3
+}
+
+IconReady(base, cur) {
+    loop base.Length {
+        if (IconDarkAt(base, cur, A_Index, 0.90))
+            return false
+    }
+    return true
 }
 
 PickIcon(*) {
@@ -222,8 +251,13 @@ AutoMeasure() {
     ENG.calMsg := ""
     ENG.calSpell := ENG.slots[1].spell
 
-    base := IconLuma()
-    if (base < 0) {
+    base := IconSamples()
+    good := 0
+    loop base.Length {
+        if (base[A_Index] >= 0)
+            good += 1
+    }
+    if (good < base.Length // 2) {
         ENG.calMsg := "cannot read that spot - pick it again"
         ENG.on := ENG.calWas
         return
@@ -235,7 +269,7 @@ AutoMeasure() {
     dimmed := false
     loop 50 {                                  ; up to ~2.5s to go dark
         Sleep(50)
-        if (IconLuma() < base * 0.82) {
+        if (IconDimmed(base, IconSamples())) {
             dimmed := true
             break
         }
@@ -247,9 +281,12 @@ AutoMeasure() {
         return
     }
 
+    clear := 0
     loop 700 {                                 ; up to ~35s to come back
         Sleep(50)
-        if (IconLuma() >= base * 0.94) {
+        ; two clean reads in a row, so a flicker mid-wipe cannot end it early
+        clear := IconReady(base, IconSamples()) ? clear + 1 : 0
+        if (clear >= 2) {
             span := A_TickCount - ENG.calT
             ENG.calT := 0
             ApplyMeasure(span)
@@ -656,7 +693,10 @@ OpenSettings(*) {
         . "button below casts the spell, then you press the measure key when it lights up.")
     g.SetFont("s9 Norm", "Segoe UI")
     g.Add("Button", "xm y+10 w186 h28 vBtCal", "Measure cooldown now")
-    g.Add("Button", "x+8 yp w150 h28 vBtPick", "Pick spell icon")
+    g.Add("Button", "x+8 yp w130 h28 vBtPick", "Pick spell icon")
+    g.SetFont("s9 Norm cD5DAE3", "Segoe UI")
+    g.Add("Text", "x+10 yp+5 w56", "size")
+    g.Add("Edit", "x+4 yp-3 w44 Center Number Background1B2029 cE8EAED vEdIconR", CFG.iconR)
     g.SetFont("s8 Norm c7A828E", "Segoe UI")
     g.Add("Text", "xm y+8 w380 h30 vIconTxt", "")
     g.SetFont("s8 Norm cFFC542", "Segoe UI")
@@ -723,7 +763,8 @@ OpenSettings(*) {
     g["BtCal"].OnEvent("Click", SettingsMeasure)
     g["BtPick"].OnEvent("Click", SettingsPick)
     g["IconTxt"].Text := (CFG.iconX >= 0)
-        ? "Icon spot: " . CFG.iconX . ", " . CFG.iconY . " - measuring is automatic."
+        ? "Icon spot: " . CFG.iconX . ", " . CFG.iconY . " - measuring is automatic. "
+          . "Size is half the icon's width; raise it if the measurement comes out short."
         : "No icon spot set, so measuring needs a second keypress. Pick the icon to automate it."
     g["BtSave"].OnEvent("Click", SettingsSave)
     g["BtReset"].OnEvent("Click", SettingsReset)
@@ -819,6 +860,7 @@ SettingsSave(ctrl, *) {
     CFG.keys.measure  := KeyOr(g["EdKeyMeas"].Value, CFG.keys.measure)
     CFG.keys.settings := KeyOr(g["EdKeySet"].Value, CFG.keys.settings)
     CFG.keys.panel    := KeyOr(g["EdKeyPanel"].Value, CFG.keys.panel)
+    CFG.iconR := Clamp(g["EdIconR"].Value, 4, 100, CFG.iconR)
     BindHotkeys()
 
     was := ENG.on
@@ -922,6 +964,7 @@ LoadIni() {
     CFG.keys.panel    := IniRead(INI_PATH, "keys", "panel", CFG.keys.panel)
     CFG.iconX := Clamp(IniRead(INI_PATH, "main", "iconX", CFG.iconX), -1, 20000, CFG.iconX)
     CFG.iconY := Clamp(IniRead(INI_PATH, "main", "iconY", CFG.iconY), -1, 20000, CFG.iconY)
+    CFG.iconR := Clamp(IniRead(INI_PATH, "main", "iconR", CFG.iconR), 4, 100, CFG.iconR)
     for i, def in CFG.slots {
         sec := "slot" . i
         key := IniRead(INI_PATH, sec, "key", def.key)
@@ -955,6 +998,7 @@ SaveIni() {
         IniWrite(CFG.keys.panel, INI_PATH, "keys", "panel")
         IniWrite(CFG.iconX, INI_PATH, "main", "iconX")
         IniWrite(CFG.iconY, INI_PATH, "main", "iconY")
+        IniWrite(CFG.iconR, INI_PATH, "main", "iconR")
         for i, def in CFG.slots {
             IniWrite(def.key, INI_PATH, "slot" . i, "key")
             IniWrite(def.cast, INI_PATH, "slot" . i, "cast")

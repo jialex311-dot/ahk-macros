@@ -131,10 +131,17 @@ up, gets eaten, and the cast comes out late a cycle or two later.
 
 So measure it instead of guessing. Best done once, automatically:
 
-1. Open settings and click **Pick spell icon**, then click your spell's icon on the
-   Roblox hotbar. This is the icon that greys out while the spell is on cooldown.
-2. Press **F2**. The macro casts the spell, watches that icon dim, and times how long
-   until it brightens again. Nothing else to do.
+1. Open settings and click **Pick spell icon**, then click the **middle** of your
+   spell's icon on the Roblox hotbar.
+2. Set **size** next to that button to roughly half your icon's width in pixels
+   (18 suits a ~36px icon). The cooldown is a wipe rather than a uniform dim, so the
+   macro has to watch the whole icon — too small a size and it reads the middle only,
+   calls the spell ready halfway through, and reports a cooldown that is far too
+   short.
+3. Press **F2**. The macro casts the spell, watches the icon wipe, and times how long
+   until every part of it is back. Nothing else to do.
+
+If the measured figure looks short, raise **size**.
 
 Without an icon spot it falls back to two keypresses: **F2** casts and starts the
 clock, then **F2** again when you see the icon light up.
