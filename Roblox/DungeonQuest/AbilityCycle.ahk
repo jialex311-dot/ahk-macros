@@ -3,10 +3,11 @@
 ; Dungeon Quest (Roblox) - spell cycler.
 ;
 ; Runs the same spell in both slots and staggers them so one is always
-; going out: the opener is timed off the cast animation, then the keys
-; get spammed so nothing is ever missed by a few ms.
+; going out: the opener is timed off the cast animation, then both keys
+; are spammed so a dropped input never costs you a cast.
 ;
-; F6 = on/off | F7 = profile | F8 = mode | F10 = hide panel | Shift+Esc = quit
+; F6 = start/stop | F7 = profile | F10 = hide panel | Shift+Esc = quit
+; Chat guard pauses it automatically while you type in Roblox.
 
 #SingleInstance Force
 SetWorkingDir(A_ScriptDir)
@@ -18,23 +19,37 @@ DllCall("Winmm\timeBeginPeriod", "UInt", 1)
 
 ; ─────────────────────────── CONFIG ───────────────────────────
 
+; YOUR ROBLOX PING, in milliseconds.
+; Find it in Roblox: Esc > Settings > Performance Stats (or Shift+F3),
+; then read the "Ping" figure while you are in a dungeon.
+;
+; The macro cannot see your real cooldowns, so it pads every one by this
+; much before pressing. Too low and your press lands before the server
+; agrees the spell is up, and gets eaten. Too high and you donate uptime.
+; If casts still get swallowed, add 30-50 to whatever your ping reads.
+PING_MS := 70
+
+; Roblox ticks at 60Hz, so the pad never drops below this no matter how
+; good your connection is.
+MARGIN_FLOOR := 25
+
 ; Only fire while Roblox is the focused window. Set to "" to run anywhere.
 GAME_WINDOW := "ahk_exe RobloxPlayerBeta.exe"
 
 ; Which profile below to start on (1 = Mage, 2 = Warrior)
 START_PROFILE := 1
 
-; "cycle" - one press per spell, exactly on cooldown. Tightest, least forgiving.
-; "spam"  - timed opener, then taps in a burst around each ready time. Default.
-; "mash"  - timed opener, then blind Q/E alternation forever.
-START_MODE := "spam"
+; ── Chat guard ──
+; Pauses the macro the moment you open Roblox chat and resumes when you
+; are done, so your spell keys never end up in the chat box.
+CHAT_GUARD    := true
+CHAT_TIMEOUT  := 20000  ; force-resume if chat never reports closing (0 = never)
+RESUME_MS     := 300    ; settling time after chat closes, before casting resumes
 
-HOLD_MS   := 40   ; how long each key is held down
-MARGIN_MS := 70   ; pad added to every cooldown (ping / server tick slop)
-LEAD_MS   := 300  ; spam mode: start tapping this early
-GAP_MS    := 70   ; spam mode: delay between taps inside a burst
-MASH_MS   := 90   ; mash mode: delay between alternating taps
-TICK_MS   := 10   ; scheduler resolution
+HOLD_MS := 40   ; how long each key is held down
+LEAD_MS := 300  ; start tapping this long before a spell comes up
+GAP_MS  := 70   ; delay between taps inside a burst
+TICK_MS := 10   ; scheduler resolution
 
 CLICK_AFTER_CAST := false  ; also left-click after each cast (placement spells)
 
@@ -63,14 +78,13 @@ PROFILES := [
 
 ; ─────────────────────────── ENGINE ───────────────────────────
 
-MODES := ["cycle", "spam", "mash"]
-
-ENG := { on: false, p: 0, mode: START_MODE, castUntil: 0, nextAct: 0, mashIdx: 1, slots: [] }
+ENG := { on: false, p: 0, castUntil: 0, nextAct: 0, slots: [],
+         typing: false, typingSince: 0, resumeAt: 0,
+         panelOn: true, lastState: "" }
 
 LoadProfile(START_PROFILE)
 PANEL := SHOW_PANEL ? BuildPanel() : ""
 ENG.panelOn := SHOW_PANEL
-ENG.lastState := ""
 OnExit(Cleanup)
 OnMessage(0x0201, DragPanel)
 SetTimer(Tick, TICK_MS)
@@ -79,13 +93,45 @@ RefreshPanel()
 
 F6::Toggle()
 F7::NextProfile()
-F8::NextMode()
 F10::TogglePanel()
 +Escape::ExitApp()
+
+; ── chat guard ────────────────────────────────────────────────
+; `~` lets the key through to Roblox as normal; we only watch it.
+#HotIf CHAT_GUARD && (GAME_WINDOW = "" || WinActive(GAME_WINDOW))
+~$/::SetTyping(true)
+~$Enter::SetTyping(!ENG.typing)
+~$NumpadEnter::SetTyping(!ENG.typing)
+~$Escape::SetTyping(false)
+#HotIf
+
+SetTyping(state) {
+    if (state = ENG.typing)
+        return
+    ENG.typing := state
+    if (state) {
+        ENG.typingSince := A_TickCount
+        ReleaseKeys()
+    } else {
+        ENG.resumeAt := A_TickCount + RESUME_MS
+    }
+}
+
+; The pad added to every cooldown, sized from your ping.
+Margin() {
+    return (PING_MS > MARGIN_FLOOR) ? PING_MS : MARGIN_FLOOR
+}
 
 Tick() {
     static busy := false
     if (busy || !ENG.on)
+        return
+    if (ENG.typing) {
+        if (CHAT_TIMEOUT > 0 && A_TickCount - ENG.typingSince > CHAT_TIMEOUT)
+            SetTyping(false)
+        return
+    }
+    if (A_TickCount < ENG.resumeAt)
         return
     if (GAME_WINDOW != "" && !WinActive(GAME_WINDOW))
         return
@@ -102,15 +148,6 @@ Step() {
     if (now < ENG.nextAct)
         return
 
-    ; mash: once every slot has fired once the stagger is set, so stop
-    ; thinking about it and just alternate.
-    if (ENG.mode = "mash" && Primed()) {
-        Cast(ENG.slots[ENG.mashIdx].key)
-        ENG.mashIdx := Mod(ENG.mashIdx, ENG.slots.Length) + 1
-        ENG.nextAct := A_TickCount + MASH_MS
-        return
-    }
-
     ; never touch a key while a cast animation is still playing - that is
     ; what keeps the two slots from stepping on each other.
     if (now < ENG.castUntil) {
@@ -118,12 +155,12 @@ Step() {
         return
     }
 
-    lead := (ENG.mode = "spam") ? LEAD_MS : 0
+    pad := Margin()
     pick := 0
     best := 0
-    for i, s in ENG.slots {
-        due := s.readyAt + MARGIN_MS
-        if (now >= due - lead && (pick = 0 || due < best)) {
+    for i, slot in ENG.slots {
+        due := slot.readyAt + pad
+        if (now >= due - LEAD_MS && (pick = 0 || due < best)) {
             pick := i
             best := due
         }
@@ -133,16 +170,15 @@ Step() {
         return
     }
 
-    s := ENG.slots[pick]
-    Cast(s.key)
+    slot := ENG.slots[pick]
+    Cast(slot.key)
     t := A_TickCount
-    due := s.readyAt + MARGIN_MS
+    due := slot.readyAt + pad
 
     if (t >= due) {
         ; spell was off cooldown, so this press fired it
-        s.readyAt := t + s.cast + s.cd
-        s.casts += 1
-        ENG.castUntil := t + s.cast
+        slot.readyAt := t + slot.cast + slot.cd
+        ENG.castUntil := t + slot.cast
         ENG.nextAct := t
     } else {
         ; still on cooldown - keep tapping, but land the next tap exactly on ready
@@ -161,19 +197,11 @@ Cast(key) {
     }
 }
 
-Primed() {
-    for s in ENG.slots {
-        if (s.casts < 1)
-            return false
-    }
-    return true
-}
-
 LoadProfile(i) {
     ENG.p := i
     ENG.slots := []
     for def in PROFILES[i].slots
-        ENG.slots.Push({ key: def.key, cast: def.cast, cd: def.cd, readyAt: 0, casts: 0 })
+        ENG.slots.Push({ key: def.key, cast: def.cast, cd: def.cd, readyAt: 0 })
     ResetCycle()
 }
 
@@ -181,16 +209,13 @@ ResetCycle() {
     now := A_TickCount
     ENG.castUntil := now
     ENG.nextAct := now
-    ENG.mashIdx := 1
-    for s in ENG.slots {
-        s.readyAt := now
-        s.casts := 0
-    }
+    for slot in ENG.slots
+        slot.readyAt := now
 }
 
 ReleaseKeys() {
-    for s in ENG.slots
-        Send("{" s.key " up}")
+    for slot in ENG.slots
+        Send("{" slot.key " up}")
 }
 
 Toggle() {
@@ -209,17 +234,7 @@ NextProfile() {
     ENG.on := was
 }
 
-NextMode() {
-    i := 1
-    for idx, m in MODES {
-        if (m = ENG.mode) {
-            i := idx
-            break
-        }
-    }
-    ENG.mode := MODES[Mod(i, MODES.Length) + 1]
-    ResetCycle()
-}
+; ─────────────────────────── PANEL ────────────────────────────
 
 BuildPanel() {
     g := Gui("-Caption +AlwaysOnTop +ToolWindow +E0x08000000", "DQ Cycler")
@@ -239,13 +254,13 @@ BuildPanel() {
     g.SetFont("s10 Norm cE8EAED")
     g.Add("Text", "xm y+10 w206 vProfile", "-")
     g.SetFont("s9 c9AA2AE")
-    g.Add("Text", "xm y+3 w206 vMode", "-")
+    g.Add("Text", "xm y+3 w206 vPing", "-")
 
     g.SetFont("s10 Bold cE8EAED", "Consolas")
     g.Add("Text", "xm y+10 w206 h36 vSlots", "")
 
     g.SetFont("s8 Norm c6C7480", "Segoe UI")
-    g.Add("Text", "xm y+8 w206", "F6 start/stop     F7 profile`nF8 mode           F10 hide")
+    g.Add("Text", "xm y+8 w206", "F6 start/stop     F7 profile`nF10 hide          Shift+Esc quit")
 
     g.Show("x" . PANEL_X . " y" . PANEL_Y . " AutoSize NoActivate")
     return g
@@ -257,8 +272,12 @@ RefreshPanel() {
 
     if (!ENG.on) {
         state := "STOPPED", colour := "cFF5555", note := "press F6 to start"
+    } else if (ENG.typing) {
+        state := "TYPING", colour := "c58A6FF", note := "chat is open - paused"
     } else if (GAME_WINDOW != "" && !WinActive(GAME_WINDOW)) {
         state := "WAITING", colour := "cFFC542", note := "Roblox is not the active window"
+    } else if (A_TickCount < ENG.resumeAt) {
+        state := "TYPING", colour := "c58A6FF", note := "resuming..."
     } else {
         state := "RUNNING", colour := "c46D160", note := "casting"
     }
@@ -275,12 +294,13 @@ RefreshPanel() {
     }
     PANEL["Note"].Text := note
     PANEL["Profile"].Text := PROFILES[ENG.p].name
-    PANEL["Mode"].Text := "mode: " . ENG.mode
+    PANEL["Ping"].Text := "ping: " . PING_MS . "ms" . (CHAT_GUARD ? "   chat guard: on" : "")
 
     now := A_TickCount
+    pad := Margin()
     lines := ""
     for slot in ENG.slots {
-        left := slot.readyAt + MARGIN_MS - now
+        left := slot.readyAt + pad - now
         if (!ENG.on)
             bar := "-"
         else if (now < slot.readyAt - slot.cd)
@@ -310,12 +330,13 @@ DragPanel(wp, lp, msg, hwnd) {
     if (!IsObject(PANEL))
         return
     owner := GuiFromHwnd(hwnd, true)
-    if (owner && owner.Hwnd = PANEL.Hwnd)
+    if (owner && owner.Hwnd = PANEL.Hwnd) {
         try {
             PostMessage(0xA1, 2, 0, , "ahk_id " . PANEL.Hwnd)
         } catch {
             return
         }
+    }
 }
 
 Cleanup(*) {
