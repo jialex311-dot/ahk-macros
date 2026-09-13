@@ -71,12 +71,17 @@ How it works:
 
 Auto-cycles your two spell slots for carrying lower dungeons.
 
-The point is the stagger. Run the same carry spell in both slots and the macro
-times the opener off the spell's activation animation — slot 2 goes out the
-instant slot 1 finishes casting — so the two cooldowns stay permanently offset
-and one spell is always going out. Once that offset is set, both keys just get
-spammed; presses that land on cooldown do nothing, so the rotation holds itself
-together without you tracking it.
+The point is the spacing. Run the same carry spell in both slots and the macro
+holds slot 2 back until it is **half a cycle** behind slot 1, so a spell goes out
+every 2.5s instead of two landing together and leaving the rest of the cycle
+dead. That keeps a timed effect — Pulse Waves' and Arrow Rain's speed boost, for
+instance — permanently up. Once the offset is set, both keys just get spammed;
+presses that land on cooldown do nothing, so the rotation holds itself together
+without you tracking it.
+
+Measured on the Mage preset: casts at 0.1s, 2.6s, 5.2s, 7.7s, 10.3s, 12.8s — a
+worst-case gap of 2.6s. Warrior comes out at 2.4s. Any buff lasting longer than
+that never drops.
 
 The spam is deliberate. It costs about 2.5 keypresses per cast instead of 1, and
 buys back the fact that a single dropped input would otherwise cost a whole cast.

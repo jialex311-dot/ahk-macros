@@ -145,7 +145,10 @@ Step() {
     best := 0
     for i, slot in ENG.slots {
         due := slot.readyAt + pad
-        if (now >= due - CFG.lead && (pick = 0 || due < best)) {
+        ; no early spam before a slot's first cast - it is genuinely off
+        ; cooldown then, so an early tap would fire it and break the spacing
+        lead := (slot.casts > 0) ? CFG.lead : 0
+        if (now >= due - lead && (pick = 0 || due < best)) {
             pick := i
             best := due
         }
@@ -163,6 +166,7 @@ Step() {
     if (t >= due) {
         ; spell was off cooldown, so this press fired it
         slot.readyAt := t + slot.cast + slot.cd
+        slot.casts += 1
         ENG.castUntil := t + slot.cast
         ENG.nextAct := t
     } else {
@@ -185,16 +189,26 @@ Cast(key) {
 RebuildSlots() {
     ENG.slots := []
     for def in CFG.slots
-        ENG.slots.Push({ key:def.key, cast:def.cast, cd:def.cd, readyAt:0, tone:"", wide:-1 })
+        ENG.slots.Push({ key:def.key, cast:def.cast, cd:def.cd, readyAt:0, casts:0, tone:"", wide:-1 })
     ResetCycle()
 }
 
 ResetCycle() {
     now := A_TickCount
+    pad := Margin()
     ENG.castUntil := now
     ENG.nextAct := now
-    for slot in ENG.slots
-        slot.readyAt := now
+
+    ; Spread the slots EVENLY across one cycle, so a spell goes out every
+    ; cycle/N seconds and a timed buff never has a chance to drop. Firing
+    ; them back to back instead would dump both spells inside two seconds
+    ; and leave the rest of the cycle dead.
+    span := ENG.slots[1].cast + ENG.slots[1].cd + pad
+    n := ENG.slots.Length
+    for i, slot in ENG.slots {
+        slot.readyAt := now + Round((i - 1) * span / n) - pad
+        slot.casts := 0
+    }
 }
 
 ReleaseKeys() {
@@ -315,7 +329,7 @@ RefreshPanel() {
         span := slot.cast + slot.cd + pad
         if (!ENG.on) {
             pct := 0, txt := "-", tone := (i = 1) ? CL.q : CL.e
-        } else if (now < slot.readyAt - slot.cd) {
+        } else if (slot.casts > 0 && now < slot.readyAt - slot.cd) {
             pct := 1000, txt := "casting", tone := CL.bright
         } else if (left <= 0) {
             pct := 1000, txt := "READY", tone := CL.ready
