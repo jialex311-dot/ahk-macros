@@ -72,16 +72,13 @@ How it works:
 Cycles two spell slots so one spell is always going out, for carrying lower
 dungeons.
 
-#### The slots must hold DIFFERENT spells
-Dungeon Quest shares one cooldown per spell. Put Pulse Waves in both slots and
-the second copy will never fire — you get one cast per cooldown, exactly what a
-single key already gives you. The macro cannot fix this; no timing works around
-a shared cooldown.
+#### Loadout
+The normal carry setup is the same spell in both slots — pulse + pulse on mage,
+arrow + arrow on war. The two copies hold separate cooldowns, which is what makes
+cycling worth doing at all.
 
-Put a **different** spell in each slot and the cooldowns are independent, so the
-two genuinely alternate. Pulse Waves and Arrow Rain both carry a speed boost, so
-one in each slot keeps that boost up permanently. The settings window warns you
-if both slots hold the same spell.
+Your kit is one class, so both spells have to come from that class. The settings
+window warns you if you pair a mage spell with a warrior one.
 
 #### How the spacing works
 Both slots are locked to the **slowest** spell's period and phased half a cycle
@@ -89,7 +86,7 @@ apart. Letting each fire as fast as it can would let the two drift in and out of
 phase and periodically clump; a shared period holds the spacing at period/N
 forever, which is what a timed buff needs.
 
-Measured with Pulse Waves + Arrow Rain: beats `QEQEQEQE`, worst gap **2603ms**.
+Measured on pulse + pulse: beats `QEQEQEQE`, worst gap **2603ms**.
 Any buff lasting longer than that never drops. With slot 2 disabled it falls back
 to `QQQ` at 5058ms — one spell, perfect uptime, no cycling.
 
@@ -114,8 +111,15 @@ Saved to `DQCycler.ini` next to the script and reloaded on startup.
 | Behaviour | Chat guard, focus guard, click-after-cast, show panel |
 | Advanced | hold / lead / gap / catch-up window |
 
-Known spells: Pulse Waves (1.0s + 4s) and Arrow Rain (0.5s + 4s). Pick **Custom**
-to type activation and cooldown for anything else.
+Known spells: Pulse Waves (1.0s + 4s, mage) and Arrow Rain (0.5s + 4s, war). Pick
+**Custom** to type activation and cooldown for anything else.
+
+**If casts are being skipped**, the cooldown figure is too short — the press lands
+before the server agrees the spell is up and gets eaten. Raise the catch-up window
+first, then add 250ms at a time to the cooldown until the skipping stops.
+
+To find out whether one slot is misbehaving on its own, untick Slot 1 and watch
+Slot 2 fire alone, then swap. Each slot should cast once per full cycle.
 
 #### Set your ping
 Find it in Roblox under **Esc > Settings > Performance Stats**. The macro cannot

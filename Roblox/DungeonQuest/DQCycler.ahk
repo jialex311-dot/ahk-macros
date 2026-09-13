@@ -34,13 +34,19 @@ BAR_W        := 148    ; cooldown bar width in px
 CHAT_TIMEOUT := 20000  ; force-resume if chat never reports closing
 RESUME_MS    := 300    ; settling time after chat closes
 
-; Each slot holds its own spell. Two copies of the SAME spell share one
-; cooldown in Dungeon Quest, so the second copy never fires - the slots
-; have to hold different spells for cycling to buy anything.
+; Each slot holds its own spell. The normal carry setup is the same spell
+; in both slots (pulse + pulse on mage, arrow + arrow on war); the two
+; copies hold separate cooldowns, which is what makes cycling worth doing.
+;
+; Your kit is one class, so both spells must come from that class - a mage
+; spell cannot be paired with a warrior one.
+;
+; Pick Custom and type the activation and cooldown off the spell for
+; anything not listed here.
 SPELLS := [
-    { name: "Pulse Waves", cast: 1000, cd: 4000 },
-    { name: "Arrow Rain",  cast: 500,  cd: 4000 },
-    { name: "Custom",      cast: 1000, cd: 4000 }
+    { name: "Pulse Waves", class: "mage", cast: 1000, cd: 4000 },
+    { name: "Arrow Rain",  class: "war",  cast: 500,  cd: 4000 },
+    { name: "Custom",      class: "any",  cast: 1000, cd: 4000 }
 ]
 
 CL := { bg:"0E1015", sunk:"1B2029", dim:"4A5162", mid:"6B7280",
@@ -53,7 +59,7 @@ CL := { bg:"0E1015", sunk:"1B2029", dim:"4A5162", mid:"6B7280",
 CFG := {
     ping: 70,
     slots: [ { key:"q", spell:"Pulse Waves", cast:1000, cd:4000, on:true },
-             { key:"e", spell:"Arrow Rain",  cast:500,  cd:4000, on:true } ],
+             { key:"e", spell:"Pulse Waves", cast:1000, cd:4000, on:true } ],
     chatGuard: true,
     focusGuard: true,
     clickAfter: false,
@@ -234,22 +240,12 @@ CycleSpan() {
 
 SetupName() {
     parts := ""
-    same := true
-    first := ""
     for slot in ENG.slots {
         if (!slot.on)
             continue
-        if (first = "")
-            first := slot.spell
-        else if (slot.spell != first)
-            same := false
         parts .= ((parts = "") ? "" : " + ") . slot.spell
     }
-    if (parts = "")
-        return "no slots enabled"
-    if (same && ActiveCount() > 1)
-        return parts . "  (shared CD!)"
-    return parts
+    return (parts = "") ? "no slots enabled" : parts
 }
 
 ResetCycle() {
@@ -529,11 +525,26 @@ SlotRow(g, n) {
     g.Add("Edit", "x+6 yp w62 Center Number Background1B2029 cE8EAED vEdCd" . n, def.cd)
 }
 
+SpellClass(name) {
+    for sp in SPELLS {
+        if (sp.name = name)
+            return sp.class
+    }
+    return "any"
+}
+
 SettingsWarn(g) {
-    both := g["CbOn1"].Value && g["CbOn2"].Value
-    if (both && g["DdSpell1"].Text = g["DdSpell2"].Text) {
-        g["Warn"].Text := "Both slots hold " . g["DdSpell1"].Text . ". Dungeon Quest shares "
-            . "one cooldown per spell, so slot 2 will never fire. Give it a different spell."
+    if (!(g["CbOn1"].Value && g["CbOn2"].Value)) {
+        g["Warn"].Text := ""
+        return
+    }
+    a := g["DdSpell1"].Text
+    b := g["DdSpell2"].Text
+    ca := SpellClass(a)
+    cb := SpellClass(b)
+    if (ca != "any" && cb != "any" && ca != cb) {
+        g["Warn"].Text := a . " is a " . ca . " spell and " . b . " is a " . cb . " spell. "
+            . "Your kit is one class, so you cannot equip both."
     } else {
         g["Warn"].Text := ""
     }
@@ -601,8 +612,8 @@ SettingsReset(ctrl, *) {
     CFG.showPanel := true
     CFG.slots[1].key := "q", CFG.slots[1].spell := "Pulse Waves"
     CFG.slots[1].cast := 1000, CFG.slots[1].cd := 4000, CFG.slots[1].on := true
-    CFG.slots[2].key := "e", CFG.slots[2].spell := "Arrow Rain"
-    CFG.slots[2].cast := 500, CFG.slots[2].cd := 4000, CFG.slots[2].on := true
+    CFG.slots[2].key := "e", CFG.slots[2].spell := "Pulse Waves"
+    CFG.slots[2].cast := 1000, CFG.slots[2].cd := 4000, CFG.slots[2].on := true
     RebuildSlots()
     SaveIni()
     SettingsClose(ctrl)
